@@ -3,15 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum {
-    MARVY_SOUND_INTRO = 0,
-    MARVY_SOUND_THROW,
-    MARVY_SOUND_HIT,
-    MARVY_SOUND_MARVY_APPEAR,
-    MARVY_SOUND_MARVY_HIT,
-    MARVY_SOUND_MISS,
-    MARVY_SOUND_FINISH,
-} marvy_sound_t;
+#include "marvy_music.h"
 
 /* Call once during application startup, after attempting nvs_flash_init().
  * Loads the best score, then creates a process-lifetime worker. A true result
@@ -27,7 +19,12 @@ uint16_t marvy_services_best_score(void);
  * retries failed writes at most once per second; it never erases NVS. */
 void marvy_services_save_best(uint16_t score);
 
-/* Non-blocking, latest cue wins. Audio may be dropped to avoid a backlog.
- * Cues are original synthesized placeholders, not the final Marvy sound logo.
- * Both enqueue functions are safe from task callbacks, not interrupt handlers. */
+/* Non-blocking, latest cue wins. Feedback is mixed over ducked background
+ * music by the same worker, never by a second codec owner. Cue motifs remain
+ * original synthesized prototypes, not an approved Marvy sound logo. */
 void marvy_services_play(marvy_sound_t sound);
+
+/* Non-blocking music gate. Enable for active gameplay; disable on welcome,
+ * results or idle. Rising edges restart the loop; repeated values do not.
+ * Cues can finish after disable. Requests are safe from task callbacks, not ISR. */
+void marvy_services_set_music(bool enabled);

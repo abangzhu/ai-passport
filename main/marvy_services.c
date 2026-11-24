@@ -9,15 +9,16 @@
 
 #include <stddef.h>
 
-#define AUDIO_RATE_HZ 16000U
 #define PCM_SAMPLES 256U
-#define TONE_AMPLITUDE 1200
 #define SAVE_RETRY_MS 1000U
 
-typedef struct {
-    uint16_t hz;
-    uint16_t ms;
-} tone_t;
+/* The build embeds only the converted PCM; host tests inject a tiny source. */
+#ifndef MARVY_BGM_PCM_DATA
+extern const uint8_t marvy_bgm_pcm_start[] __asm__("_binary_marvy_bgm_pcm_start");
+extern const uint8_t marvy_bgm_pcm_end[] __asm__("_binary_marvy_bgm_pcm_end");
+#define MARVY_BGM_PCM_DATA marvy_bgm_pcm_start
+#define MARVY_BGM_PCM_BYTES ((size_t)(marvy_bgm_pcm_end - marvy_bgm_pcm_start))
+#endif
 
 static const char *TAG = "marvy_services";
 static QueueHandle_t s_sounds;
@@ -30,6 +31,9 @@ static bool s_audio_attempted;
 static bool s_audio_ready;
 static bool s_save_attempted;
 static TickType_t s_last_save_attempt;
+static bool s_music_requested;
+static bool s_stream_open;
+static marvy_music_t s_mixer;
 
 /* Only this worker accesses PCM, codec state and the save retry state. */
 static int16_t s_pcm[PCM_SAMPLES];
@@ -53,6 +57,21 @@ void marvy_services_play(marvy_sound_t sound)
 {
     if (!s_sounds || sound < MARVY_SOUND_INTRO || sound > MARVY_SOUND_FINISH) return;
     (void)xQueueOverwrite(s_sounds, &sound);
+}
+
+void marvy_services_set_music(bool enabled)
+{
+    portENTER_CRITICAL(&s_state_lock);
+    s_music_requested = enabled;
+    portEXIT_CRITICAL(&s_state_lock);
+}
+
+static bool music_requested(void)
+{
+    portENTER_CRITICAL(&s_state_lock);
+    bool enabled = s_music_requested;
+    portEXIT_CRITICAL(&s_state_lock);
+    return enabled;
 }
 
 static void load_best(void)
@@ -118,68 +137,26 @@ static void persist_best(TickType_t now)
     }
 }
 
-static bool play_tone(tone_t tone)
+static void close_stream(void)
 {
-    const uint32_t count = AUDIO_RATE_HZ * tone.ms / 1000U;
-    const uint32_t phase_step = (uint32_t)(((uint64_t)tone.hz << 32) / AUDIO_RATE_HZ);
-    uint32_t phase = 0;
-    for (uint32_t offset = 0; offset < count; offset += PCM_SAMPLES) {
-        uint32_t chunk = count - offset;
-        if (chunk > PCM_SAMPLES) chunk = PCM_SAMPLES;
-        for (uint32_t i = 0; i < chunk; i++) {
-            uint32_t at = offset + i;
-            uint32_t remaining = count - at - 1;
-            int32_t gain = TONE_AMPLITUDE;
-            if (at < 64U) gain = gain * (int32_t)at / 64;
-            if (remaining < 128U) gain = gain * (int32_t)remaining / 128;
-            phase += phase_step;
-            uint32_t ramp = phase >> 16;
-            int32_t triangle = (int32_t)(ramp < 32768U ? ramp : 65535U - ramp) * 2 - 32767;
-            s_pcm[i] = (int16_t)(triangle * gain / 32768);
-        }
-        if (bsp_audio_write(s_pcm, chunk * sizeof(s_pcm[0])) != ESP_OK) return false;
-    }
-    return true;
+    esp_err_t error = bsp_audio_sleep();
+    s_stream_open = false;
+    if (error != ESP_OK) s_audio_ready = false;
 }
 
-static void play_sound(marvy_sound_t sound)
+static bool open_stream(void)
 {
-    /* Small original scale motifs. These are replaceable prototype cues, not
-     * recordings or an approved brand sound logo. */
-    static const tone_t intro[] = {{523, 65}, {659, 65}, {784, 70}, {1047, 115}};
-    static const tone_t thrown[] = {{440, 40}, {660, 45}};
-    static const tone_t hit[] = {{880, 65}, {1175, 95}};
-    static const tone_t appear[] = {{659, 60}, {880, 75}};
-    static const tone_t marvy_hit[] = {{784, 60}, {988, 60}, {1175, 60}, {1568, 120}};
-    static const tone_t miss[] = {{330, 65}, {262, 80}};
-    static const tone_t finish[] = {{659, 70}, {784, 70}, {1047, 120}};
-    const tone_t *notes = NULL;
-    size_t count = 0;
-#define SELECT_NOTES(array) do { notes = (array); count = sizeof(array) / sizeof((array)[0]); } while (0)
-    switch (sound) {
-    case MARVY_SOUND_INTRO: SELECT_NOTES(intro); break;
-    case MARVY_SOUND_THROW: SELECT_NOTES(thrown); break;
-    case MARVY_SOUND_HIT: SELECT_NOTES(hit); break;
-    case MARVY_SOUND_MARVY_APPEAR: SELECT_NOTES(appear); break;
-    case MARVY_SOUND_MARVY_HIT: SELECT_NOTES(marvy_hit); break;
-    case MARVY_SOUND_MISS: SELECT_NOTES(miss); break;
-    case MARVY_SOUND_FINISH: SELECT_NOTES(finish); break;
-    }
-#undef SELECT_NOTES
-
+    if (s_stream_open) return true;
     esp_err_t error = bsp_audio_wake();
-    if (error == ESP_OK) error = bsp_audio_set_format(AUDIO_RATE_HZ, 16, 1);
-    bool played = error == ESP_OK;
-    for (size_t i = 0; played && i < count; i++) played = play_tone(notes[i]);
-
-    /* The envelope ends at zero; suspend between short cues to avoid keeping
-     * the codec active while the player is idle. Flash saves happen only at
-     * these playback boundaries, never during a PCM stream. */
-    esp_err_t sleep_error = bsp_audio_sleep();
-    if (!played || sleep_error != ESP_OK) {
+    if (error == ESP_OK) error = bsp_audio_set_format(MARVY_MUSIC_SAMPLE_RATE, 16, 1);
+    if (error != ESP_OK) {
+        close_stream();
         s_audio_ready = false;
         ESP_LOGW(TAG, "Audio unavailable; continuing silently");
+        return false;
     }
+    s_stream_open = true;
+    return true;
 }
 
 static void services_worker(void *arg)
@@ -196,10 +173,28 @@ static void services_worker(void *arg)
     }
 
     for (;;) {
+        marvy_music_set_enabled(&s_mixer, music_requested());
         marvy_sound_t sound;
-        BaseType_t has_sound = xQueueReceive(s_sounds, &sound, pdMS_TO_TICKS(20));
+        /* I2S provides pacing while active. If the codec fails, retain the
+         * blocking queue wait so a requested BGM cannot busy-spin this task. */
+        TickType_t wait = s_audio_ready && marvy_music_active(&s_mixer)
+                              ? 0 : pdMS_TO_TICKS(20);
+        BaseType_t has_sound = xQueueReceive(s_sounds, &sound, wait);
+        if (has_sound == pdTRUE) marvy_music_cue(&s_mixer, sound);
+        /* Flush pending scores between 16 ms PCM chunks, not once per song. */
         persist_best(xTaskGetTickCount());
-        if (has_sound == pdTRUE && s_audio_ready) play_sound(sound);
+        if (!s_audio_ready) continue;
+        if (marvy_music_active(&s_mixer)) {
+            if (!open_stream()) continue;
+            marvy_music_render(&s_mixer, s_pcm, PCM_SAMPLES);
+            if (bsp_audio_write(s_pcm, sizeof(s_pcm)) != ESP_OK) {
+                close_stream();
+                s_audio_ready = false;
+                ESP_LOGW(TAG, "Audio output failed; continuing silently");
+            }
+        } else if (s_stream_open) {
+            close_stream();
+        }
     }
 }
 
@@ -209,6 +204,7 @@ bool marvy_services_start(void)
     load_best();
     s_sounds = xQueueCreate(1, sizeof(marvy_sound_t));
     if (!s_sounds) return false;
+    marvy_music_init(&s_mixer, MARVY_BGM_PCM_DATA, MARVY_BGM_PCM_BYTES);
     if (xTaskCreate(services_worker, "marvy_services", 3072, NULL, 4, &s_task) != pdPASS) {
         vQueueDelete(s_sounds);
         s_sounds = NULL;

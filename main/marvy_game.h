@@ -14,6 +14,7 @@ enum {
     MARVY_INTRO_MS = 2000,
     MARVY_FLIGHT_MS = 600,
     MARVY_FEEDBACK_MS = 400,
+    MARVY_MARVY_FEEDBACK_MS = 1200,
     /* Bound work after a corrupt timestamp or a very long suspended frame. */
     MARVY_MAX_STEP_MS = 60000,
 };
@@ -72,6 +73,10 @@ void marvy_game_init(marvy_game_t *game, uint32_t seed, uint16_t best);
  * During flight or feedback a press is ignored. Events are returned once, not
  * retained for a later read; callers may dispatch them to their audio worker. */
 uint32_t marvy_game_press(marvy_game_t *game);
+
+/* The branded catch keeps its score and greeting visible longer. Ordinary
+ * catches and misses retain the shorter feedback interval. */
+uint32_t marvy_game_feedback_ms(const marvy_game_t *game);
 
 /* Advances sheep before resolving each landing, including when a call spans
  * multiple phase deadlines. At most MARVY_MAX_STEP_MS is accepted per call. */

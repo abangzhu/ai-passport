@@ -4,6 +4,13 @@
 #include <string.h>
 
 #include "marvy_services_stubs/marvy_test_stubs.h"
+static const uint8_t test_music_pcm[] = {
+    0, 0, 0xff, 0x3f, 0xff, 0x7f, 0xff, 0x3f,
+    0, 0, 0, 0xc0, 0, 0x80, 0, 0xc0,
+};
+#define MARVY_BGM_PCM_DATA test_music_pcm
+#define MARVY_BGM_PCM_BYTES sizeof(test_music_pcm)
+#include "../main/marvy_music.c"
 #include "../main/marvy_services.c"
 
 struct test_queue {
@@ -19,6 +26,7 @@ static bool test_audio_sleep_fail;
 static unsigned test_task_creates, test_queue_deletes, test_overwrites;
 static unsigned test_sets, test_commits, test_audio_writes, test_write_fail_at;
 static unsigned test_audio_initializes, test_audio_sleeps, test_nonzero_samples;
+static unsigned test_audio_formats, test_audio_wakes;
 static uint16_t test_disk_score, test_pending_score;
 static TickType_t test_ticks;
 static void (*test_task)(void *);
@@ -122,11 +130,12 @@ esp_err_t bsp_audio_init(void)
 esp_err_t bsp_audio_set_format(uint32_t hz, uint8_t bits, uint8_t channels)
 {
     assert(hz == 16000 && bits == 16 && channels == 1);
+    test_audio_formats++;
     return test_audio_format_fail ? ESP_FAIL : ESP_OK;
 }
 
 void bsp_audio_set_volume(uint8_t volume) { assert(volume > 0 && volume <= 40); }
-esp_err_t bsp_audio_wake(void) { return test_audio_wake_fail ? ESP_FAIL : ESP_OK; }
+esp_err_t bsp_audio_wake(void) { test_audio_wakes++; return test_audio_wake_fail ? ESP_FAIL : ESP_OK; }
 esp_err_t bsp_audio_sleep(void)
 {
     test_audio_sleeps++;
@@ -139,17 +148,20 @@ esp_err_t bsp_audio_write(const void *pcm, size_t bytes)
     assert(bytes > 0 && bytes <= 512 && bytes % sizeof(int16_t) == 0);
     const int16_t *samples = pcm;
     for (size_t i = 0; i < bytes / sizeof(*samples); i++) {
-        assert(samples[i] >= -1800 && samples[i] <= 1800);
+        assert(samples[i] >= -MARVY_MIX_LIMIT && samples[i] <= MARVY_MIX_LIMIT);
         if (samples[i]) test_nonzero_samples++;
     }
+    test_ticks += (TickType_t)(bytes / sizeof(int16_t) / 16);
     return test_audio_writes == test_write_fail_at ? ESP_FAIL : ESP_OK;
 }
 
-static void run_worker_once(void)
+static void run_worker_frames(unsigned frames)
 {
-    test_iterations = 1;
+    test_iterations = frames;
     if (setjmp(test_worker_exit) == 0) test_task(NULL);
 }
+
+static void run_worker_once(void) { run_worker_frames(1); }
 
 static void reset_test(void)
 {
@@ -161,6 +173,7 @@ static void reset_test(void)
     test_task_creates = test_queue_deletes = test_overwrites = 0;
     test_sets = test_commits = test_audio_writes = test_write_fail_at = 0;
     test_audio_initializes = test_audio_sleeps = test_nonzero_samples = 0;
+    test_audio_formats = test_audio_wakes = 0;
     test_disk_score = test_pending_score = 0;
     test_ticks = 0;
     s_task = NULL;
@@ -168,6 +181,9 @@ static void reset_test(void)
     s_best = s_saved_best = 0;
     s_loaded = s_audio_attempted = s_audio_ready = s_save_attempted = false;
     s_last_save_attempt = 0;
+    s_music_requested = false;
+    s_stream_open = false;
+    memset(&s_mixer, 0, sizeof(s_mixer));
 }
 
 int main(void)
@@ -267,7 +283,7 @@ int main(void)
     assert(test_queue.item == MARVY_SOUND_MARVY_HIT);
     for (int sound = MARVY_SOUND_INTRO; sound <= MARVY_SOUND_FINISH; sound++) {
         marvy_services_play((marvy_sound_t)sound);
-        run_worker_once();
+        run_worker_frames(40);
     }
     assert(test_audio_initializes == 1 && test_audio_writes > 0);
     assert(test_nonzero_samples > 0 && test_audio_sleeps >= 7);
@@ -299,6 +315,41 @@ int main(void)
     test_ticks += 1001;
     run_worker_once();
     assert(test_disk_score == 4);
-    puts("Marvy services persistence, retry, audio and failure tests: PASS");
+    reset_test();
+    assert(marvy_services_start());
+    marvy_services_set_music(true);
+    assert(test_audio_writes == 0); /* API cannot block on codec or storage. */
+    run_worker_frames(40);
+    assert(test_audio_writes == 40 && test_nonzero_samples > 0);
+    assert(test_audio_wakes == 1 && test_audio_formats == 1);
+    unsigned wakes = test_audio_wakes, sleeps = test_audio_sleeps;
+    marvy_services_play(MARVY_SOUND_MARVY_HIT);
+    marvy_services_save_best(31);
+    run_worker_frames(40);
+    assert(test_disk_score == 31 && test_audio_writes == 80);
+    assert(test_audio_wakes == wakes && test_audio_sleeps == sleeps);
+    marvy_services_set_music(false);
+    run_worker_frames(2); /* Finish short fade, then suspend once. */
+    unsigned writes = test_audio_writes;
+    assert(test_audio_sleeps == sleeps + 1);
+    run_worker_frames(20);
+    assert(test_audio_writes == writes);
+    marvy_services_set_music(true);
+    run_worker_once();
+    assert(test_audio_writes == writes + 1 && test_audio_wakes == wakes + 1);
+
+    reset_test();
+    assert(marvy_services_start());
+    test_write_fail_at = 2;
+    marvy_services_set_music(true);
+    run_worker_frames(3);
+    assert(test_audio_writes == 2 && !s_audio_ready);
+    marvy_services_save_best(42);
+    run_worker_frames(3);
+    assert(test_disk_score == 42 && test_audio_writes == 2);
+    TickType_t before = test_ticks;
+    run_worker_frames(3);
+    assert(test_ticks - before >= 60); /* Broken music must not busy-spin. */
+    puts("Marvy services persistence, streaming BGM, cues and failure tests: PASS");
     return 0;
 }

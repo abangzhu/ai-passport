@@ -71,6 +71,33 @@ static void test_press_can_complete_a_landing_before_its_action(void)
     assert(session.game.ring_ms == 0 && session.game.rings_left == 8);
 }
 
+static void test_last_marvy_catch_keeps_extended_greeting_before_restart(void)
+{
+    marvy_session_t session;
+    start(&session, 0);
+    clear_lane(&session);
+    session.game.best_score = 0;
+    session.game.rings_left = 1;
+    session.game.sheep[0].x = MARVY_AIM_X;
+    session.game.sheep[0].speed = 0;
+    session.game.sheep[0].marvy = true;
+    session.game.sheep[0].announced = true;
+    session.game.sheep[0].hidden_ms = 0;
+    assert(marvy_session_press(&session, 100) == MARVY_EVENT_THROW);
+    uint32_t events = marvy_session_press(&session, 1899);
+    assert(events == (MARVY_EVENT_HIT | MARVY_EVENT_MARVY_HIT));
+    assert(session.game.phase == MARVY_PHASE_PLAYING);
+    assert(session.game.ring_state == MARVY_RING_FEEDBACK);
+    assert(session.game.ring_ms == 1199 && session.game.score == 5);
+    assert(session.game.rings_left == 0 && session.game.sheep[0].hidden_ms == 501);
+    events = marvy_session_advance(&session, 1900);
+    assert(events == (MARVY_EVENT_FINISH | MARVY_EVENT_NEW_BEST));
+    assert(session.game.phase == MARVY_PHASE_RESULTS && session.game.best_score == 5);
+    assert(marvy_session_press(&session, 1901) == MARVY_EVENT_START);
+    assert(session.game.phase == MARVY_PHASE_PLAYING && session.game.rings_left == 10);
+    assert(session.game.score == 0 && session.game.best_score == 5);
+}
+
 static void test_idle_deadline_is_exact_and_sheep_pause(void)
 {
     marvy_session_t session, reference;
@@ -197,6 +224,7 @@ int main(void)
     test_event_time_before_landing_and_feedback_boundaries();
     test_last_feedback_press_does_not_restart_but_new_press_does();
     test_press_can_complete_a_landing_before_its_action();
+    test_last_marvy_catch_keeps_extended_greeting_before_restart();
     test_idle_deadline_is_exact_and_sheep_pause();
     test_first_idle_press_wakes_without_throwing();
     test_a_press_at_idle_cutoff_only_wakes();

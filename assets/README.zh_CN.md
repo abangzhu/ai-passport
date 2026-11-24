@@ -21,7 +21,7 @@
 | --- | --- |
 | [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | 未修改的 Noto Sans SC Regular 源字体，用于可复现子集生成；不编译进固件。 |
 | [`fonts/OFL.txt`](fonts/OFL.txt) | 源字体的 SIL Open Font License 1.1 与版权声明；再分发字体资源时应保留。 |
-| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | 去重、排序后的固定中文界面字符清单。两个尺寸还包含可打印 ASCII U+0020–U+007E。 |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | 去重、排序后的 48 个固定中文界面字符清单。两个尺寸还包含 95 个可打印 ASCII 字符 U+0020–U+007E。 |
 | [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px、4 bpp、未压缩的 LVGL 位图字库，用于标签和提示；导出符号 `marvy_font_16`。 |
 | [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px、4 bpp、未压缩的 LVGL 位图字库，用于标题；导出符号 `marvy_font_20`。 |
 
@@ -48,6 +48,19 @@
 | [`images/readme-hardware-specs.png`](images/readme-hardware-specs.png) | 2172 × 724，PNG RGBA | 保留为可选技术参考图，不再用于首页主视觉。于 2026-09-17 使用内置图像生成工具为本仓库生成；已根据文档中的硬件能力契约核对图中的六项标签与参数。 |
 | [`images/logo-wordmark.png`](images/logo-wordmark.png) | 1648 × 336，PNG RGBA | 从仓库原始 `images/logo.png` 中精确裁切并去除背景的黑色字标；保留用于上游硬件文档的浅色主题。 |
 | [`images/logo-wordmark-dark.png`](images/logo-wordmark-dark.png) | 1648 × 336，PNG RGBA | 提取字标的白色版本，保留用于上游硬件文档的深色主题。 |
+| [`images/marvy-logo.png`](images/marvy-logo.png) | 600 × 600，PNG RGBA | 用户于 2026-11-24 提供用于本产品的 Marvy Logo 原图，未修改；保留透明背景与粉蓝渐变。 |
+| [`images/marvy-logo-welcome.png`](images/marvy-logo-welcome.png) | 112 × 112，PNG RGBA | 从用户提供的 Logo 生成的欢迎页预览。 |
+| [`images/marvy-logo-badge.png`](images/marvy-logo-badge.png) | 20 × 20，PNG RGBA | 用于标记游戏中、捕获动画及结算页 Marvy 羊的徽标预览。 |
+
+用户提供的 Marvy Logo 是本产品的品牌素材，不是公共领域或开源 Logo。
+原图 SHA-256：
+`4ab5057babe4ee8a9f07c99fd5cd7b105e2751d5d7dd36c035ce935ba56efa99`。
+在仓库根目录执行 `python3 tools/generate_marvy_logo.py`，可在不裁切、不变形的
+前提下缩放完整图片，生成两个 PNG 预览及 `main/marvy_logo.h` / `main/marvy_logo.c`。
+转换器依赖 Pillow；执行 `python3 tools/generate_marvy_logo.py --check` 可只检查
+生成文件而不写入。固件使用 LVGL RGB565A8 描述符：小端 RGB565 色彩平面后接
+独立 A8 平面。两份常驻 Flash 的像素数组共 38,832 字节，无需运行时 PNG 解码器
+或整图堆内存分配。
 
 - 使用描述性命名，并记录尺寸、像素格式、转换步骤与目标路径。
 - 优先采用适合 240 × 320 RGB565 显示的格式，并纳入 Flash 与内部 RAM 考量。
@@ -62,6 +75,35 @@
 - 与当前 BSP 音频路径匹配时优先采用 16 kHz、16 位单声道 PCM。
 - 嵌入音频前评估 Flash 与内部 RAM 成本；长录音应流式或分块。
 - 无再分发许可不提交媒体文件。
+
+### Marvy 背景音乐
+
+游戏使用 **ADnova** 的 [beepbox #11](https://freesound.org/s/381316/)，按
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) 使用。它是一段轻松、
+欢快的芯片音乐循环，通过 sound 技能的 Freesound 搜索为离线套圈游戏挑选。
+获取记录、许可、文件摘要和转换设置保存在
+[`music/marvy_bgm.source.json`](music/marvy_bgm.source.json)。
+
+| 文件 | 格式与用途 |
+| --- | --- |
+| [`music/fs_381316_beepbox-11.mp3`](music/fs_381316_beepbox-11.mp3) | 从 Freesound 下载的高质量 MP3 预览，44.1 kHz 单声道；用于转换。 |
+| [`music/marvy_bgm.pcm`](music/marvy_bgm.pcm) | 16 kHz、16 位小端有符号单声道 PCM；203,407 个采样 / 406,814 字节 / 约 12.713 秒，嵌入固件。 |
+| [`music/marvy_bgm.source.json`](music/marvy_bgm.source.json) | 来源、CC0 许可、获取时元数据、SHA-256 和处理方法。 |
+
+在仓库根目录使用 FFmpeg 转换：
+
+```bash
+ffmpeg -hide_banner -loglevel error -y \
+  -i assets/music/fs_381316_beepbox-11.mp3 \
+  -ac 1 -ar 16000 -c:a pcm_s16le -f s16le assets/music/marvy_bgm.pcm
+```
+
+应用以 `marvy_bgm_pcm` 内嵌 PCM，并由音频任务使用一个 256 采样的缓冲区从
+Flash 分块播放。运行时将背景乐振幅缩小为原始 PCM 的 1/16，循环接缝使用
+4 ms 淡化，音乐开停使用 16 ms 渐变。原创合成反馈音效叠加在音乐之上；
+播放音效时，背景乐再降到 1/4。音频任务独占 codec，输出音量设为 32%。
+背景乐只在游戏进行中循环，在欢迎页、结算页和闲置暂停时停止。这些软件级别
+不等于真实扬声器的响度测量，最终听感仍需真机检查。
 
 ## 电池参数（battery）
 

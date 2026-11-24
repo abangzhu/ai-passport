@@ -6,7 +6,7 @@
 
 enum {
     SIMULATION_SLICE_MS = 10,
-    CAPTURE_HIDE_MS = 900,
+    CAPTURE_GRACE_MS = 500,
 };
 
 static uint32_t next_random(marvy_game_t *game)
@@ -24,15 +24,20 @@ static uint32_t saturated_add(uint32_t a, uint32_t b)
     return UINT32_MAX - a < b ? UINT32_MAX : a + b;
 }
 
+static float sheep_speed(marvy_game_t *game, bool marvy)
+{
+    /* Separate ranges guarantee every branded sheep is faster than every
+     * ordinary sheep, including after either type respawns. */
+    return marvy ? 48.0f + (float)(next_random(game) % 9u)
+                 : 30.0f + (float)(next_random(game) % 13u);
+}
+
 static void spawn_sheep(marvy_game_t *game, marvy_sheep_t *sheep)
 {
     bool rightward = (next_random(game) & 1u) != 0;
     sheep->x = rightward ? -32.0f : MARVY_WIDTH + 32.0f;
     sheep->marvy = next_random(game) % 5u == 0;
-    float speed = 30.0f + (float)(next_random(game) % 13u);
-    if (sheep->marvy) {
-        speed *= 1.28f;
-    }
+    float speed = sheep_speed(game, sheep->marvy);
     sheep->speed = rightward ? speed : -speed;
     sheep->announced = false;
     sheep->hidden_ms = 0;
@@ -56,10 +61,7 @@ static void start_round(marvy_game_t *game)
         marvy_sheep_t *sheep = &game->sheep[i];
         sheep->x = positions[i];
         sheep->marvy = i == marvy_index;
-        float speed = 30.0f + (float)(next_random(game) % 9u);
-        if (sheep->marvy) {
-            speed *= 1.28f;
-        }
+        float speed = sheep_speed(game, sheep->marvy);
         sheep->speed = i % 2u == 0 ? speed : -speed;
         sheep->announced = false;
         sheep->hidden_ms = 0;
@@ -96,6 +98,12 @@ uint32_t marvy_game_press(marvy_game_t *game)
     game->last_hit_sheep = -1;
     game->last_hit_marvy = false;
     return MARVY_EVENT_THROW;
+}
+
+uint32_t marvy_game_feedback_ms(const marvy_game_t *game)
+{
+    return game->last_hit_marvy && game->last_points == 5
+           ? MARVY_MARVY_FEEDBACK_MS : MARVY_FEEDBACK_MS;
 }
 
 static uint32_t move_sheep(marvy_game_t *game, uint32_t elapsed_ms)
@@ -152,7 +160,7 @@ static uint32_t resolve_landing(marvy_game_t *game)
     game->last_hit_marvy = sheep->marvy;
     game->last_points = sheep->marvy ? 5 : 1;
     game->score += game->last_points;
-    sheep->hidden_ms = CAPTURE_HIDE_MS;
+    sheep->hidden_ms = marvy_game_feedback_ms(game) + CAPTURE_GRACE_MS;
     return MARVY_EVENT_HIT | (sheep->marvy ? MARVY_EVENT_MARVY_HIT : 0);
 }
 
@@ -201,7 +209,7 @@ uint32_t marvy_game_step(marvy_game_t *game, uint32_t elapsed_ms)
         }
         if (game->ring_state != MARVY_RING_READY) {
             uint32_t duration = game->ring_state == MARVY_RING_FLYING ?
-                                MARVY_FLIGHT_MS : MARVY_FEEDBACK_MS;
+                                MARVY_FLIGHT_MS : marvy_game_feedback_ms(game);
             uint32_t remaining = duration - game->ring_ms;
             if (slice > remaining) {
                 slice = remaining;
@@ -217,7 +225,7 @@ uint32_t marvy_game_step(marvy_game_t *game, uint32_t elapsed_ms)
             }
         } else if (game->ring_state == MARVY_RING_FEEDBACK) {
             game->ring_ms += slice;
-            if (game->ring_ms == MARVY_FEEDBACK_MS) {
+            if (game->ring_ms == marvy_game_feedback_ms(game)) {
                 events |= finish_feedback(game);
             }
         }

@@ -47,7 +47,7 @@ static void dispatch_events(uint32_t events, const marvy_game_t *game)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Marvy sheep ring: offline prototype 0.1.0");
+    ESP_LOGI(TAG, "Marvy sheep ring: branded music iteration 0.2.0-dev");
     if (esp_sleep_get_wakeup_causes() & (1u << ESP_SLEEP_WAKEUP_GPIO)) {
         key_guard_arm(&s_key_guard, esp_timer_get_time(), 5000000);
     }
@@ -100,6 +100,8 @@ void app_main(void)
             events |= marvy_session_press(&session, pressed_at_ms);
         }
         events |= marvy_session_advance(&session, now);
+        marvy_services_set_music(session.game.phase == MARVY_PHASE_PLAYING &&
+                                 !session.dimmed);
         dispatch_events(events, &session.game);
         uint16_t stored_best = marvy_services_best_score();
         if (stored_best > session.game.best_score) session.game.best_score = stored_best;

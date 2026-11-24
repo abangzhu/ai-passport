@@ -58,6 +58,7 @@ static void test_throw_ignores_repeated_input(void)
     assert(game.ring_state == MARVY_RING_FLYING && game.score == 0);
     assert(marvy_game_step(&game, 1) == MARVY_EVENT_MISS);
     assert(game.ring_state == MARVY_RING_FEEDBACK);
+    assert(marvy_game_feedback_ms(&game) == 400);
     assert(marvy_game_press(&game) == 0);
     assert(marvy_game_step(&game, MARVY_FEEDBACK_MS) == 0);
     assert(game.ring_state == MARVY_RING_READY);
@@ -75,6 +76,7 @@ static void test_ordinary_and_marvy_scores(void)
     uint32_t events = marvy_game_step(&game, MARVY_FLIGHT_MS);
     assert(events == MARVY_EVENT_HIT);
     assert(game.score == 1 && game.last_points == 1 && !game.last_hit_marvy);
+    assert(marvy_game_feedback_ms(&game) == 400);
     assert(game.last_hit_sheep == 0);
     assert(game.sheep[0].hidden_ms > 0);
     assert(marvy_game_step(&game, 0) == 0);
@@ -86,6 +88,7 @@ static void test_ordinary_and_marvy_scores(void)
     assert((events & (MARVY_EVENT_HIT | MARVY_EVENT_MARVY_HIT)) ==
            (MARVY_EVENT_HIT | MARVY_EVENT_MARVY_HIT));
     assert(game.score == 6 && game.last_points == 5 && game.last_hit_marvy);
+    assert(marvy_game_feedback_ms(&game) == 1200);
     assert(game.last_hit_sheep == 2);
 }
 
@@ -137,7 +140,7 @@ static void test_last_ring_settles_and_best_is_retained(void)
         marvy_game_step(&game, MARVY_FLIGHT_MS);
         assert(game.phase == MARVY_PHASE_PLAYING);
         assert(game.score == (i + 1) * 5);
-        uint32_t events = marvy_game_step(&game, MARVY_FEEDBACK_MS - 1);
+        uint32_t events = marvy_game_step(&game, 1200 - 1);
         assert((events & MARVY_EVENT_FINISH) == 0);
         assert(game.phase == MARVY_PHASE_PLAYING);
         events = marvy_game_step(&game, 1);
@@ -231,8 +234,76 @@ static void test_large_step_and_deterministic_movement(void)
     assert(a.phase == MARVY_PHASE_PLAYING && a.phase_ms == 1000);
 }
 
+static void assert_sheep_speed_classes(const marvy_game_t *game)
+{
+    for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) {
+        float speed = fabsf(game->sheep[i].speed);
+        if (game->sheep[i].marvy) {
+            assert(speed >= 48 && speed <= 56);
+            assert(speed > 42); /* Faster than even the fastest ordinary sheep. */
+        } else {
+            assert(speed >= 30 && speed <= 42);
+        }
+    }
+}
+
+static void test_marvy_speeds_are_strictly_faster_at_start_and_respawn(void)
+{
+    unsigned ordinary = 0, branded = 0;
+    for (uint32_t seed = 1; seed <= 200; ++seed) {
+        marvy_game_t game;
+        start(&game, seed, 0);
+        assert_sheep_speed_classes(&game);
+        for (unsigned traversal = 0; traversal < 20; ++traversal) {
+            /* Drive real boundary re-entry rather than calling a spawn helper. */
+            for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) {
+                game.sheep[i].x = MARVY_WIDTH + 45;
+            }
+            marvy_game_step(&game, 1);
+            assert_sheep_speed_classes(&game);
+            for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) {
+                if (game.sheep[i].marvy) ++branded;
+                else ++ordinary;
+            }
+        }
+    }
+    assert(ordinary > 0 && branded > 0);
+}
+
+static void test_marvy_celebration_can_be_read_before_next_throw(void)
+{
+    marvy_game_t game;
+    start(&game, 4, 0);
+    clear_lane(&game);
+    target(&game, 0, MARVY_AIM_X, 0, true);
+    assert(marvy_game_press(&game) == MARVY_EVENT_THROW);
+    uint32_t events = marvy_game_step(&game, MARVY_FLIGHT_MS);
+    assert((events & MARVY_EVENT_MARVY_HIT) != 0);
+    assert(game.score == 5 && game.last_points == 5);
+    assert(marvy_game_feedback_ms(&game) == 1200);
+    assert(game.sheep[0].hidden_ms == 1700);
+    assert(marvy_game_press(&game) == 0);
+    marvy_game_step(&game, 1199);
+    assert(game.ring_state == MARVY_RING_FEEDBACK && game.ring_ms == 1199);
+    assert(game.last_hit_marvy && game.score == 5);
+    assert(game.sheep[0].hidden_ms == 501);
+    assert(marvy_game_press(&game) == 0 && game.rings_left == 9);
+    marvy_game_step(&game, 1);
+    assert(game.ring_state == MARVY_RING_READY);
+    assert(game.sheep[0].hidden_ms == 500);
+    marvy_game_step(&game, 499);
+    assert(game.sheep[0].hidden_ms == 1 && game.score == 5);
+    marvy_game_step(&game, 1);
+    assert(game.sheep[0].hidden_ms == 0 && game.score == 5);
+    assert(game.sheep[0].x < 0 || game.sheep[0].x > MARVY_WIDTH);
+    assert(marvy_game_press(&game) == MARVY_EVENT_THROW);
+    assert(game.rings_left == 8);
+}
+
 int main(void)
 {
+    test_marvy_speeds_are_strictly_faster_at_start_and_respawn();
+    test_marvy_celebration_can_be_read_before_next_throw();
     test_intro_and_skip();
     test_throw_ignores_repeated_input();
     test_ordinary_and_marvy_scores();

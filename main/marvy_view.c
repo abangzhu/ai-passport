@@ -1,11 +1,11 @@
 #include "marvy_view.h"
+#include "marvy_logo.h"
 #include "lvgl.h"
 
 LV_FONT_DECLARE(marvy_font_16);
 LV_FONT_DECLARE(marvy_font_20);
 
-/* Original procedural prototypes; replace the M badge with approved artwork
- * when the final Marvy identity is available. No inherited demo UI is used. */
+/* Original sheep artwork uses the supplied Marvy logo as its shared badge. */
 #define PAPER 0xFFF7E8
 #define INK 0x302445
 #define PURPLE 0x7853CF
@@ -14,6 +14,7 @@ LV_FONT_DECLARE(marvy_font_20);
 #define DARK_GRASS 0x91AD77
 #define GOLD 0xF0B953
 #define WHITE 0xFFFDF8
+#define PINK 0xF52BBE
 
 typedef struct {
     lv_obj_t *group;
@@ -28,7 +29,7 @@ typedef struct {
 
 static lv_obj_t *s_screen, *s_intro, *s_play, *s_results;
 static lv_obj_t *s_battery, *s_score, *s_best, *s_hint;
-static lv_obj_t *s_feedback, *s_ring;
+static lv_obj_t *s_feedback, *s_feedback_points, *s_feedback_message, *s_ring;
 static lv_obj_t *s_ring_ticks[MARVY_RING_COUNT];
 static lv_obj_t *s_result_score, *s_result_best, *s_result_heading;
 static sheep_view_t s_sheep[MARVY_SHEEP_COUNT], s_caught;
@@ -112,9 +113,9 @@ static sheep_view_t sheep_create(lv_obj_t *parent, int x, int y, int scale,
     box(sheep.head, 0, 4 * scale, 16 * scale, 19 * scale, INK, 7 * scale);
     box(sheep.head, 10 * scale, 8 * scale, 3 * scale, 3 * scale,
         WHITE, LV_RADIUS_CIRCLE);
-    sheep.badge = label(sheep.group, "M", 12 * scale, 18 * scale, 24 * scale,
-                         scale == 1 ? &lv_font_montserrat_14
-                                    : &lv_font_montserrat_28, PURPLE);
+    sheep.badge = lv_image_create(sheep.group);
+    lv_image_set_src(sheep.badge, &marvy_logo_badge);
+    lv_obj_set_pos(sheep.badge, 13 * scale, 16 * scale);
     sheep.sparkle = label(sheep.group, "+", 16 * scale, -9 * scale,
                            24 * scale, &lv_font_montserrat_20, PURPLE);
     visible(sheep.badge, marvy);
@@ -159,11 +160,12 @@ void marvy_view_create(void)
     s_battery = label(s_screen, "--%", 178, 19, 43, &lv_font_montserrat_12, INK);
 
     s_intro = group(s_screen, 0, 0, 240, 320);
-    label(s_intro, "Marvy 套羊", 18, 67, 204, &marvy_font_20, INK);
-    label(s_intro, "套个好彩头", 18, 101, 204, &marvy_font_16, PURPLE);
-    box(s_intro, 48, 203, 145, 17, GRASS, LV_RADIUS_CIRCLE);
-    (void)sheep_create(s_intro, 65, 126, 2, true);
-    label(s_intro, "羊年快乐", 18, 239, 204, &marvy_font_20, INK);
+    label(s_intro, "Marvy 套羊", 18, 58, 204, &marvy_font_20, INK);
+    lv_obj_t *welcome_logo = lv_image_create(s_intro);
+    lv_image_set_src(welcome_logo, &marvy_logo_welcome);
+    lv_obj_set_pos(welcome_logo, 64, 90);
+    label(s_intro, "Marvy 祝你", 18, 215, 204, &marvy_font_20, INK);
+    label(s_intro, "新年快乐", 18, 244, 204, &marvy_font_20, PURPLE);
     label(s_intro, "按任意功能键开始", 12, 278, 216, &marvy_font_16, PURPLE);
 
     s_play = group(s_screen, 0, 0, 240, 320);
@@ -181,7 +183,12 @@ void marvy_view_create(void)
     lv_obj_set_style_bg_opa(s_ring, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_ring, 3, 0);
     lv_obj_set_style_border_color(s_ring, lv_color_hex(GOLD), 0);
-    s_feedback = label(s_play, "", 14, 133, 212, &marvy_font_20, PURPLE);
+    s_feedback = box(s_play, 26, 107, 188, 65, WHITE, 12);
+    lv_obj_set_style_border_width(s_feedback, 2, 0);
+    lv_obj_set_style_border_color(s_feedback, lv_color_hex(LILAC), 0);
+    s_feedback_points = label(s_feedback, "", 0, 3, 184, &marvy_font_20, PURPLE);
+    s_feedback_message = label(s_feedback, "", 0, 32, 184, &marvy_font_20, INK);
+    visible(s_feedback, false);
     for (unsigned i = 0; i < MARVY_RING_COUNT; ++i) {
         s_ring_ticks[i] = box(s_play, 23 + (int)i * 20, 249, 13, 13,
                               GOLD, LV_RADIUS_CIRCLE);
@@ -258,17 +265,25 @@ void marvy_view_render(const marvy_game_t *game, int battery_percent,
     visible(s_caught.group, feedback && game->last_points > 0);
     if (feedback && game->last_points > 0) {
         sheep_color(&s_caught, game->last_hit_marvy);
+        uint32_t duration = marvy_game_feedback_ms(game);
         lv_obj_set_pos(s_caught.group, (int)game->last_hit_x - 27,
-                        MARVY_SHEEP_BODY_Y - 24 - (int)game->ring_ms / 55);
+                        MARVY_SHEEP_BODY_Y - 24 - (int)(game->ring_ms * 6 / duration));
     }
     visible(s_feedback, feedback);
     int feedback_kind = !feedback ? -1 : game->last_hit_marvy ? 5 : game->last_points ? 1 : 0;
     if (s_previous_feedback != feedback_kind) {
-        lv_label_set_text(s_feedback, feedback_kind == 5 ? "Marvy +5 好彩头"
-                              : feedback_kind == 1 ? "+1 套中啦" : "差一点 再来");
+        lv_label_set_text(s_feedback_points, feedback_kind == 5 ? "+5 分"
+                              : feedback_kind == 1 ? "+1 分" : "差一点");
+        lv_label_set_text(s_feedback_message, feedback_kind == 5 ? "新年快乐"
+                              : feedback_kind == 1 ? "套中啦" : "再来");
+        lv_obj_set_style_border_color(s_feedback,
+            lv_color_hex(feedback_kind == 5 ? PINK : LILAC), 0);
         s_previous_feedback = feedback_kind;
     }
-    if (feedback) lv_obj_set_y(s_feedback, 133 - (int)game->ring_ms / 80);
+    if (feedback) {
+        uint32_t duration = marvy_game_feedback_ms(game);
+        lv_obj_set_y(s_feedback, 107 - (int)(game->ring_ms * 4 / duration));
+    }
     visible(s_ring, game->ring_state != MARVY_RING_READY);
     if (game->ring_state == MARVY_RING_FLYING) {
         float t = (float)game->ring_ms / MARVY_FLIGHT_MS;
@@ -278,7 +293,7 @@ void marvy_view_render(const marvy_game_t *game, int battery_percent,
         lv_obj_set_pos(s_ring, MARVY_AIM_X - width / 2,
                         266 - (int)(72 * t + 57 * arc) - height / 2);
     } else if (feedback) {
-        int width = 50 + (int)game->ring_ms / 35;
+        int width = 50 + (int)(game->ring_ms * 11 / marvy_game_feedback_ms(game));
         lv_obj_set_size(s_ring, width, 15);
         lv_obj_set_pos(s_ring,
             (game->last_points ? (int)game->last_hit_x : MARVY_AIM_X) - width / 2,

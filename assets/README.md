@@ -23,7 +23,7 @@ Store reusable font files and generated font sources in `fonts/`.
 | --- | --- |
 | [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | Unmodified Noto Sans SC Regular source for reproducible subset generation; not compiled into the firmware. |
 | [`fonts/OFL.txt`](fonts/OFL.txt) | Source font's SIL Open Font License 1.1 and copyright notice. Retain it with redistributed font assets. |
-| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted fixed non-ASCII UI character inventory. Both generated sizes also include printable ASCII U+0020–U+007E. |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted inventory of 48 fixed Chinese UI characters. Both generated sizes also include 95 printable ASCII characters U+0020–U+007E. |
 | [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px, 4 bpp, uncompressed LVGL bitmap font for labels and hints; exported symbol `marvy_font_16`. |
 | [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px, 4 bpp, uncompressed LVGL bitmap font for headings; exported symbol `marvy_font_20`. |
 
@@ -52,6 +52,21 @@ Store reusable source images and generated display assets in `images/`.
 | [`images/readme-hardware-specs.png`](images/readme-hardware-specs.png) | 2172 × 724, PNG RGBA | Optional technical infographic retained as a reference asset; it is no longer used as the homepage hero. Generated for this repository with the built-in image generation tool on 2026-09-17; the six labels and values were checked against the documented hardware contract. |
 | [`images/logo-wordmark.png`](images/logo-wordmark.png) | 1648 × 336, PNG RGBA | Transparent black wordmark extracted from the repository's original `images/logo.png`; retained for light backgrounds in upstream hardware documentation. |
 | [`images/logo-wordmark-dark.png`](images/logo-wordmark-dark.png) | 1648 × 336, PNG RGBA | White version of the extracted wordmark for dark backgrounds in upstream hardware documentation. |
+| [`images/marvy-logo.png`](images/marvy-logo.png) | 600 × 600, PNG RGBA | Unmodified Marvy logo supplied by the user on 2026-11-24 for this product. Transparent background and pink/blue gradient retained. |
+| [`images/marvy-logo-welcome.png`](images/marvy-logo-welcome.png) | 112 × 112, PNG RGBA | Welcome-screen preview generated from the supplied logo. |
+| [`images/marvy-logo-badge.png`](images/marvy-logo-badge.png) | 20 × 20, PNG RGBA | Badge preview used to identify moving, caught, and result-page Marvy sheep. |
+
+The supplied Marvy logo is brand material for this product, not a public-domain
+or open-source logo. Its source SHA-256 is
+`4ab5057babe4ee8a9f07c99fd5cd7b105e2751d5d7dd36c035ce935ba56efa99`.
+Run `python3 tools/generate_marvy_logo.py` from the repository root to fit the
+full image without cropping or distortion and generate the two PNG previews
+and `main/marvy_logo.h` / `main/marvy_logo.c`. The converter requires Pillow;
+`python3 tools/generate_marvy_logo.py --check` verifies the generated files
+without modifying them. Firmware uses LVGL RGB565A8 descriptors: a
+little-endian RGB565 color plane followed by a separate A8 plane. The two
+Flash-resident pixel arrays total 38,832 bytes and need no runtime PNG decoder
+or full-image heap allocation.
 
 - Use descriptive names and document dimensions, pixel format, conversion steps, and destination.
 - Prefer formats suitable for the 240 × 320 RGB565 display and account for Flash and internal RAM.
@@ -66,6 +81,38 @@ Store reusable music and sound-effect sources in `music/`.
 - Prefer 16 kHz, 16-bit mono PCM when it matches the current BSP audio path.
 - Check Flash and internal-RAM cost before embedding audio; stream or chunk long recordings.
 - Do not commit media without redistribution permission.
+
+### Marvy background music
+
+The game uses [beepbox #11](https://freesound.org/s/381316/) by **ADnova**, under
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). It is a relaxed,
+happy chiptune loop, selected through the sound skill's Freesound search for
+the offline ring-toss game. Retrieval details, license, file hashes, and
+conversion settings are retained in [`music/marvy_bgm.source.json`](music/marvy_bgm.source.json).
+
+| File | Format and use |
+| --- | --- |
+| [`music/fs_381316_beepbox-11.mp3`](music/fs_381316_beepbox-11.mp3) | Downloaded Freesound high-quality MP3 preview, 44.1 kHz mono; conversion source. |
+| [`music/marvy_bgm.pcm`](music/marvy_bgm.pcm) | Signed 16-bit little-endian PCM, 16 kHz mono; 203,407 samples / 406,814 bytes / approximately 12.713 seconds. Embedded in firmware. |
+| [`music/marvy_bgm.source.json`](music/marvy_bgm.source.json) | Source, CC0 license, retrieval metadata, SHA-256 values, and processing recipe. |
+
+Convert from the repository root with FFmpeg:
+
+```bash
+ffmpeg -hide_banner -loglevel error -y \
+  -i assets/music/fs_381316_beepbox-11.mp3 \
+  -ac 1 -ar 16000 -c:a pcm_s16le -f s16le assets/music/marvy_bgm.pcm
+```
+
+The application embeds the PCM as `marvy_bgm_pcm` and streams it from Flash
+through one 256-sample worker buffer. Runtime processing scales the background
+to 1/16 of source amplitude, fades the loop seam over 4 ms, and ramps music
+on/off over 16 ms. Original synthesized feedback cues mix over the music;
+while a cue plays, the background level is reduced to another 1/4. The audio
+worker alone owns the codec, with output volume set to 32%. Background music
+loops only during active play and stops on welcome/results screens and idle
+pause. These software levels are not a measured loudness guarantee on the
+physical speaker; final listening remains an on-device check.
 
 ## Battery profiles
 

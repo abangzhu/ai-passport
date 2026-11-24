@@ -15,16 +15,39 @@
 - 添加字库前评估 Flash 与内部 RAM 影响；ESP32-C3 无 PSRAM。
 - 不提交许可不允许分发的字库。
 
+### Marvy 界面字库
+
+| 文件 | 用途 |
+| --- | --- |
+| [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | 未修改的 Noto Sans SC Regular 源字体，用于可复现子集生成；不编译进固件。 |
+| [`fonts/OFL.txt`](fonts/OFL.txt) | 源字体的 SIL Open Font License 1.1 与版权声明；再分发字体资源时应保留。 |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | 去重、排序后的固定中文界面字符清单。两个尺寸还包含可打印 ASCII U+0020–U+007E。 |
+| [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px、4 bpp、未压缩的 LVGL 位图字库，用于标签和提示；导出符号 `marvy_font_16`。 |
+| [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px、4 bpp、未压缩的 LVGL 位图字库，用于标题；导出符号 `marvy_font_20`。 |
+
+来源：[Noto CJK 官方仓库](https://github.com/notofonts/noto-cjk)，
+[`Sans/SubsetOTF/SC/NotoSansSC-Regular.otf`](https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf)，
+及其[许可证](https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/LICENSE)。
+保留的源字体以 SHA-256 固定：
+`faa6c9df652116dde789d351359f3d7e5d2285a2b2a1f04a2d7244df706d5ea9`。
+
+在仓库根目录执行 `bash tools/generate_marvy_fonts.sh` 可重新生成。
+脚本校验源字体摘要，固定使用 `lv_font_conv` **1.5.3**，以
+`--bpp 4 --format lvgl --no-compress --lv-include lvgl.h` 分别生成 16 和 20 px
+字库。生成的 C 文件加入应用 CMake 源码列表，界面标签须显式选择对应字体。
+修改字符清单后应重建两个尺寸并运行字符覆盖 gate。固定子集不支持任意输入；
+真机字形与排版检查仍是独立验收项。
+
 ## 图片（images）
 
 可复用的源图与生成的显示资产放在 `images/`。
 
 | 文件 | 尺寸与格式 | 用途与来源 |
 | --- | --- | --- |
-| [`images/home.jpg`](images/home.jpg) | 3840 × 2160，JPEG | 嵌入中英文项目 README 的产品主图，突出 AI Passport 产品形象与开放、人人可创作的理念。 |
+| [`images/home.jpg`](images/home.jpg) | 3840 × 2160，JPEG | 保留在上游硬件文档中的产品主图。 |
 | [`images/readme-hardware-specs.png`](images/readme-hardware-specs.png) | 2172 × 724，PNG RGBA | 保留为可选技术参考图，不再用于首页主视觉。于 2026-09-17 使用内置图像生成工具为本仓库生成；已根据文档中的硬件能力契约核对图中的六项标签与参数。 |
-| [`images/logo-wordmark.png`](images/logo-wordmark.png) | 1648 × 336，PNG RGBA | 从仓库原始 `images/logo.png` 中精确裁切并去除背景的黑色字标；用于中英文项目 README 的浅色主题。 |
-| [`images/logo-wordmark-dark.png`](images/logo-wordmark-dark.png) | 1648 × 336，PNG RGBA | 提取字标的白色版本；README 使用 `<picture>` 在 GitHub 深色主题下显示。 |
+| [`images/logo-wordmark.png`](images/logo-wordmark.png) | 1648 × 336，PNG RGBA | 从仓库原始 `images/logo.png` 中精确裁切并去除背景的黑色字标；保留用于上游硬件文档的浅色主题。 |
+| [`images/logo-wordmark-dark.png`](images/logo-wordmark-dark.png) | 1648 × 336，PNG RGBA | 提取字标的白色版本，保留用于上游硬件文档的深色主题。 |
 
 - 使用描述性命名，并记录尺寸、像素格式、转换步骤与目标路径。
 - 优先采用适合 240 × 320 RGB565 显示的格式，并纳入 Flash 与内部 RAM 考量。

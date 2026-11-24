@@ -4,6 +4,7 @@
 #include "bsp_pins.h"
 #include "key_guard.h"
 #include "marvy_session.h"
+#include "marvy_input.h"
 #include "marvy_services.h"
 #include "marvy_view.h"
 #include "esp_log.h"
@@ -19,18 +20,38 @@ static const char *TAG = "marvy_ring";
 static QueueHandle_t s_input;
 static volatile bool s_input_ready;
 static key_guard_t s_key_guard;
+static portMUX_TYPE s_input_lock = portMUX_INITIALIZER_UNLOCKED;
+static bool s_input_overflow;
+
+_Static_assert(BSP_BTN_COUNT == MARVY_INPUT_BUTTON_COUNT, "Input adapter matches board buttons");
+
+static bool take_input_overflow(void)
+{
+    portENTER_CRITICAL(&s_input_lock);
+    bool overflow = s_input_overflow;
+    s_input_overflow = false;
+    portEXIT_CRITICAL(&s_input_lock);
+    return overflow;
+}
 
 static void on_key(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 {
-    (void)button;
     (void)user;
-    /* PRESS is the only action. CLICK/DOUBLE/LONG must not spend extra rings.
-     * The shared esp_timer callback only enqueues, never blocks or draws. */
+    /* Capture both edges; duration controls distance. CLICK/DOUBLE/LONG must
+     * not duplicate gestures. The timer callback never blocks or draws. */
     if (key_guard_consume(&s_key_guard, event == BSP_BTN_RELEASE, esp_timer_get_time())) return;
     if (!s_input_ready || s_input == NULL) return;
-    if (event == BSP_BTN_PRESS) {
-        uint64_t pressed_at_ms = (uint64_t)(esp_timer_get_time() / 1000);
-        (void)xQueueSend(s_input, &pressed_at_ms, 0);
+    if (event == BSP_BTN_PRESS || event == BSP_BTN_RELEASE) {
+        const marvy_input_event_t input = {
+            .button = (uint8_t)button,
+            .pressed = event == BSP_BTN_PRESS,
+            .at_ms = (uint64_t)(esp_timer_get_time() / 1000),
+        };
+        if (xQueueSend(s_input, &input, 0) != pdTRUE) {
+            portENTER_CRITICAL(&s_input_lock);
+            s_input_overflow = true;
+            portEXIT_CRITICAL(&s_input_lock);
+        }
     }
 }
 
@@ -47,7 +68,7 @@ static void dispatch_events(uint32_t events, const marvy_game_t *game)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Marvy sheep ring: branded music iteration 0.2.0-dev");
+    ESP_LOGI(TAG, "Marvy sheep ring: pixel charge iteration 0.3.0-dev");
     if (esp_sleep_get_wakeup_causes() & (1u << ESP_SLEEP_WAKEUP_GPIO)) {
         key_guard_arm(&s_key_guard, esp_timer_get_time(), 5000000);
     }
@@ -65,7 +86,7 @@ void app_main(void)
     bool battery_ready = bsp_battery_init() == ESP_OK;
     int battery = battery_ready ? bsp_battery_soc() : -1;
     if (!marvy_services_start()) ESP_LOGW(TAG, "Background services unavailable");
-    s_input = xQueueCreate(8, sizeof(uint64_t));
+    s_input = xQueueCreate(16, sizeof(marvy_input_event_t));
     bool input_ready = s_input != NULL && bsp_button_init(on_key, NULL) == ESP_OK;
     if (!input_ready) ESP_LOGE(TAG, "Button input unavailable");
     if (input_ready && s_key_guard.armed) {
@@ -74,6 +95,8 @@ void app_main(void)
     }
 
     marvy_session_t session;
+    marvy_input_t input;
+    marvy_input_init(&input);
     marvy_session_init(&session, esp_random(), marvy_services_best_score(),
                        (uint64_t)(esp_timer_get_time() / 1000));
     if (!bsp_lvgl_lock(1000)) {
@@ -93,13 +116,23 @@ void app_main(void)
          * then stays newer than this cutoff and remains valid next frame. */
         uint64_t now = (uint64_t)(esp_timer_get_time() / 1000);
         uint32_t events = 0;
-        uint64_t pressed_at_ms;
+        marvy_input_event_t edge;
+        if (take_input_overflow()) {
+            (void)xQueueReset(s_input);
+            marvy_input_cancel(&input, &session);
+        }
         /* Preserve the order of input and simulation deadlines. A key pressed
          * during the final feedback must not become a results-page restart. */
-        while (s_input != NULL && xQueueReceive(s_input, &pressed_at_ms, 0) == pdTRUE) {
-            events |= marvy_session_press(&session, pressed_at_ms);
+        while (s_input != NULL && xQueueReceive(s_input, &edge, 0) == pdTRUE) {
+            if (take_input_overflow()) {
+                (void)xQueueReset(s_input);
+                marvy_input_cancel(&input, &session);
+                break;
+            }
+            events |= marvy_input_handle(&input, &session, &edge);
         }
         events |= marvy_session_advance(&session, now);
+        if (session.dimmed) marvy_input_cancel(&input, &session);
         marvy_services_set_music(session.game.phase == MARVY_PHASE_PLAYING &&
                                  !session.dimmed);
         dispatch_events(events, &session.game);

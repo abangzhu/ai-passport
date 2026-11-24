@@ -98,6 +98,10 @@ run_static_checks() {
         tests/test_marvy_session.c main/marvy_session.c main/marvy_game.c \
         -o "${test_dir}/test_marvy_session"
     "${test_dir}/test_marvy_session"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_marvy_input.c main/marvy_input.c main/marvy_session.c main/marvy_game.c \
+        -o "${test_dir}/test_marvy_input"
+    "${test_dir}/test_marvy_input"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
         -Itests/marvy_services_stubs -Imain tests/test_marvy_services.c \
         -o "${test_dir}/test_marvy_services"

@@ -10,8 +10,10 @@ enum {
     MARVY_SHEEP_BODY_Y = 194,
     MARVY_SHEEP_COUNT = 4,
     MARVY_RING_COUNT = 10,
-    MARVY_HIT_RADIUS = 20,
-    MARVY_INTRO_MS = 2000,
+    MARVY_HIT_RADIUS = 16,
+    MARVY_CHARGE_MS = 1400,
+    MARVY_TARGET_MIN_X = 32,
+    MARVY_TARGET_MAX_X = 208,
     MARVY_FLIGHT_MS = 600,
     MARVY_FEEDBACK_MS = 400,
     MARVY_MARVY_FEEDBACK_MS = 1200,
@@ -27,6 +29,7 @@ typedef enum {
 
 typedef enum {
     MARVY_RING_READY,
+    MARVY_RING_CHARGING,
     MARVY_RING_FLYING,
     MARVY_RING_FEEDBACK,
 } marvy_ring_state_t;
@@ -58,6 +61,7 @@ typedef struct {
     uint8_t rings_left;
     uint32_t phase_ms;
     uint32_t ring_ms;
+    float ring_target_x; /* Locked on release, in logical screen pixels. */
     uint8_t last_points;
     float last_hit_x;
     bool last_hit_marvy;
@@ -69,10 +73,22 @@ typedef struct {
 /* All functions require a valid game pointer and a single owning task. */
 void marvy_game_init(marvy_game_t *game, uint32_t seed, uint16_t best);
 
-/* Intro press skips the splash; results press restarts without spending a ring.
- * During flight or feedback a press is ignored. Events are returned once, not
- * retained for a later read; callers may dispatch them to their audio worker. */
+/* Intro press starts the game; results press restarts without spending a ring.
+ * A ready press starts charging. Repeated presses, flight and feedback presses
+ * are ignored. A shot is spent only by release. Events are returned once. */
 uint32_t marvy_game_press(marvy_game_t *game);
+
+/* Convert a hold duration to a near-left/far-right landing position. The full
+ * range takes MARVY_CHARGE_MS; longer holds clamp without firing on their own. */
+float marvy_game_charge_target_x(uint32_t held_ms);
+
+/* Only a charging release locks the landing position, spends one ring and
+ * starts flight. A release after welcome/restart or without a press is inert. */
+uint32_t marvy_game_release(marvy_game_t *game);
+
+/* Fail-closed input recovery: cancel an unfinished charge without spending a
+ * ring. Already released projectiles and feedback continue normally. */
+void marvy_game_cancel_charge(marvy_game_t *game);
 
 /* The branded catch keeps its score and greeting visible longer. Ordinary
  * catches and misses retain the shorter feedback interval. */

@@ -23,6 +23,24 @@ void marvy_music_init(marvy_music_t *mixer, const uint8_t *pcm, size_t bytes)
     mixer->bgm_bytes = pcm ? bytes - bytes % 2 : 0;
 }
 
+void marvy_music_set_hit_samples(marvy_music_t *mixer,
+                                 const uint8_t *ordinary, size_t ordinary_bytes,
+                                 const uint8_t *marvy, size_t marvy_bytes)
+{
+    mixer->ordinary_hit_pcm = ordinary;
+    mixer->ordinary_hit_bytes = ordinary ? ordinary_bytes - ordinary_bytes % 2 : 0;
+    mixer->marvy_hit_pcm = marvy;
+    mixer->marvy_hit_bytes = marvy ? marvy_bytes - marvy_bytes % 2 : 0;
+    mixer->cue_pcm = NULL;
+    mixer->cue_pcm_bytes = mixer->cue_pcm_offset = 0;
+}
+
+static bool cue_active(const marvy_music_t *mixer)
+{
+    return mixer->cue_pcm_offset < mixer->cue_pcm_bytes
+           || mixer->note_index < mixer->note_count;
+}
+
 void marvy_music_set_enabled(marvy_music_t *mixer, bool enabled)
 {
     if (enabled && !mixer->enabled) mixer->bgm_offset = 0;
@@ -31,7 +49,18 @@ void marvy_music_set_enabled(marvy_music_t *mixer, bool enabled)
 
 void marvy_music_cue(marvy_music_t *mixer, marvy_sound_t sound)
 {
-    /* Original short feedback motifs, mixed over the licensed background loop. */
+    const uint8_t *pcm = sound == MARVY_SOUND_HIT ? mixer->ordinary_hit_pcm
+                        : sound == MARVY_SOUND_MARVY_HIT ? mixer->marvy_hit_pcm : NULL;
+    size_t bytes = sound == MARVY_SOUND_HIT ? mixer->ordinary_hit_bytes
+                     : sound == MARVY_SOUND_MARVY_HIT ? mixer->marvy_hit_bytes : 0;
+    if (pcm && bytes > 0) {
+        mixer->cue_pcm = pcm;
+        mixer->cue_pcm_bytes = bytes;
+        mixer->cue_pcm_offset = 0;
+        mixer->note_count = mixer->note_index = 0;
+        return;
+    }
+    /* Original short feedback motifs remain for other cues and as fallback. */
     static const note_t intro[] = {{523, 65}, {659, 65}, {784, 70}, {1047, 115}};
     static const note_t thrown[] = {{440, 40}, {660, 45}};
     static const note_t hit[] = {{880, 65}, {1175, 95}};
@@ -53,6 +82,8 @@ void marvy_music_cue(marvy_music_t *mixer, marvy_sound_t sound)
     default: return;
     }
 #undef SELECT_NOTES
+    mixer->cue_pcm = NULL;
+    mixer->cue_pcm_bytes = mixer->cue_pcm_offset = 0;
     mixer->notes = notes;
     mixer->note_count = count;
     mixer->note_index = 0;
@@ -62,14 +93,30 @@ void marvy_music_cue(marvy_music_t *mixer, marvy_sound_t sound)
 bool marvy_music_active(const marvy_music_t *mixer)
 {
     return (mixer->bgm_bytes > 0 && (mixer->enabled || mixer->bgm_gain > 0))
-           || mixer->note_index < mixer->note_count;
+           || cue_active(mixer);
+}
+
+static int32_t read_pcm_sample(const uint8_t *pcm, size_t at)
+{
+    uint16_t bits = (uint16_t)pcm[at] | (uint16_t)pcm[at + 1] << 8;
+    return bits < 32768U ? (int32_t)bits : (int32_t)bits - 65536;
 }
 
 static int32_t cue_sample(marvy_music_t *mixer)
 {
+    if (mixer->cue_pcm_offset < mixer->cue_pcm_bytes) {
+        size_t at = mixer->cue_pcm_offset;
+        int32_t value = read_pcm_sample(mixer->cue_pcm, at);
+        size_t position = at / 2;
+        size_t remaining = (mixer->cue_pcm_bytes - at) / 2 - 1;
+        if (position < 32) value = value * (int32_t)position / 32;
+        if (remaining < 64) value = value * (int32_t)remaining / 64;
+        mixer->cue_pcm_offset += 2;
+        return value / 3;
+    }
     if (mixer->note_index >= mixer->note_count) return 0;
     uint32_t remaining = mixer->note_samples - mixer->note_position - 1;
-    int32_t gain = 1200;
+    int32_t gain = 4800;
     if (mixer->note_position < 64U) gain = gain * (int32_t)mixer->note_position / 64;
     if (remaining < 128U) gain = gain * (int32_t)remaining / 128;
     mixer->phase += mixer->phase_step;
@@ -87,7 +134,7 @@ static int32_t cue_sample(marvy_music_t *mixer)
 static int32_t music_sample(marvy_music_t *mixer)
 {
     if (mixer->bgm_bytes == 0) return 0;
-    bool cue = mixer->note_index < mixer->note_count;
+    bool cue = cue_active(mixer);
     uint16_t target = !mixer->enabled ? 0 : cue ? 64 : MARVY_MUSIC_FULL_GAIN;
     /* A 16 ms gain ramp avoids an abrupt BGM cut on pause or cue ducking. */
     if (mixer->bgm_gain < target) mixer->bgm_gain++;
@@ -95,8 +142,7 @@ static int32_t music_sample(marvy_music_t *mixer)
     if (mixer->bgm_gain == 0) return 0;
 
     size_t at = mixer->bgm_offset;
-    uint16_t bits = (uint16_t)mixer->bgm[at] | (uint16_t)mixer->bgm[at + 1] << 8;
-    int32_t sample = bits < 32768U ? (int32_t)bits : (int32_t)bits - 65536;
+    int32_t sample = read_pcm_sample(mixer->bgm, at);
     size_t position = at / 2;
     size_t remaining = (mixer->bgm_bytes - at) / 2 - 1;
     /* Short seam envelopes tame decoded MP3 edge padding without adding a
@@ -104,7 +150,7 @@ static int32_t music_sample(marvy_music_t *mixer)
     if (position < 64) sample = sample * (int32_t)position / 64;
     if (remaining < 64) sample = sample * (int32_t)remaining / 64;
     mixer->bgm_offset = at + 2 == mixer->bgm_bytes ? 0 : at + 2;
-    return sample / 16 * (int32_t)mixer->bgm_gain / MARVY_MUSIC_FULL_GAIN;
+    return sample / 4 * (int32_t)mixer->bgm_gain / MARVY_MUSIC_FULL_GAIN;
 }
 
 void marvy_music_render(marvy_music_t *mixer, int16_t *out, size_t count)

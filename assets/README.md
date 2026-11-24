@@ -23,9 +23,11 @@ Store reusable font files and generated font sources in `fonts/`.
 | --- | --- |
 | [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | Unmodified Noto Sans SC Regular source for reproducible subset generation; not compiled into the firmware. |
 | [`fonts/OFL.txt`](fonts/OFL.txt) | Source font's SIL Open Font License 1.1 and copyright notice. Retain it with redistributed font assets. |
-| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted inventory of 48 fixed Chinese UI characters. Both generated sizes also include 95 printable ASCII characters U+0020–U+007E. |
-| [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px, 4 bpp, uncompressed LVGL bitmap font for labels and hints; exported symbol `marvy_font_16`. |
-| [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px, 4 bpp, uncompressed LVGL bitmap font for headings; exported symbol `marvy_font_20`. |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted inventory of 53 fixed Chinese UI characters. All four fonts also include 95 printable ASCII characters U+0020–U+007E: 148 glyphs per font. |
+| [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px, 4 bpp, uncompressed smooth LVGL bitmap font for welcome-screen text; exported symbol `marvy_font_16`. |
+| [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px, 4 bpp, uncompressed smooth LVGL bitmap font for welcome-screen headings; exported symbol `marvy_font_20`. |
+| [`fonts/marvy_pixel_16.c`](fonts/marvy_pixel_16.c) | 16 px, 1 bpp, uncompressed hard-edge LVGL bitmap font for gameplay HUD and hints; exported symbol `marvy_pixel_16`. |
+| [`fonts/marvy_pixel_20.c`](fonts/marvy_pixel_20.c) | 20 px, 1 bpp, uncompressed hard-edge LVGL bitmap font for gameplay and result headings and celebration text; exported symbol `marvy_pixel_20`. |
 
 Source: [Noto CJK official repository](https://github.com/notofonts/noto-cjk),
 [`Sans/SubsetOTF/SC/NotoSansSC-Regular.otf`](https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf),
@@ -35,11 +37,12 @@ The vendored source bytes are pinned by SHA-256
 
 Regenerate from the repository root with
 `bash tools/generate_marvy_fonts.sh`. The script validates the source checksum,
-uses `lv_font_conv` **1.5.3**, and requests `--bpp 4 --format lvgl
---no-compress --lv-include lvgl.h` for sizes 16 and 20. Generated C files go
-into the application's CMake source list; UI labels must explicitly select
-the appropriate font. Rebuild both sizes after changing the inventory and run
-the glyph coverage gate. This fixed subset does not support arbitrary input;
+uses `lv_font_conv` **1.5.3**, and generates sizes 16 and 20 in two styles:
+`--bpp 4` for smooth welcome fonts and `--bpp 1` for hard-edge game fonts. Both
+use `--format lvgl --no-compress --lv-include lvgl.h`. Generated C files go
+into the application's CMake source list; UI labels explicitly select their
+font. Rebuild all four files after changing the inventory and run the glyph
+coverage gate. This fixed subset does not support arbitrary input;
 on-device glyph and layout inspection remains a separate acceptance check.
 
 ## Images
@@ -82,37 +85,51 @@ Store reusable music and sound-effect sources in `music/`.
 - Check Flash and internal-RAM cost before embedding audio; stream or chunk long recordings.
 - Do not commit media without redistribution permission.
 
-### Marvy background music
+### Marvy music and sampled hit effects
 
-The game uses [beepbox #11](https://freesound.org/s/381316/) by **ADnova**, under
-[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). It is a relaxed,
-happy chiptune loop, selected through the sound skill's Freesound search for
-the offline ring-toss game. Retrieval details, license, file hashes, and
-conversion settings are retained in [`music/marvy_bgm.source.json`](music/marvy_bgm.source.json).
+Three clips selected through the sound skill's Freesound search are used under
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), which permits use
+in this commercial gift application. The checked-in metadata retains each
+source page, author, retrieval snapshot, source and PCM SHA-256 values, and
+conversion recipe: [`music/marvy_audio.source.json`](music/marvy_audio.source.json).
 
-| File | Format and use |
-| --- | --- |
-| [`music/fs_381316_beepbox-11.mp3`](music/fs_381316_beepbox-11.mp3) | Downloaded Freesound high-quality MP3 preview, 44.1 kHz mono; conversion source. |
-| [`music/marvy_bgm.pcm`](music/marvy_bgm.pcm) | Signed 16-bit little-endian PCM, 16 kHz mono; 203,407 samples / 406,814 bytes / approximately 12.713 seconds. Embedded in firmware. |
-| [`music/marvy_bgm.source.json`](music/marvy_bgm.source.json) | Source, CC0 license, retrieval metadata, SHA-256 values, and processing recipe. |
+| Role and source | Conversion source | Embedded PCM |
+| --- | --- | --- |
+| BGM: [adventure](https://freesound.org/s/749008/) by **solarpsychedelic** | [`fs_749008_adventure.mp3`](music/fs_749008_adventure.mp3), downloaded high-quality preview | [`marvy_bgm.pcm`](music/marvy_bgm.pcm): 177,824 samples / 355,648 bytes / 11.114 seconds; cheerful chiptune loop. |
+| Ordinary catch: [8-bit coin1.1.wav](https://freesound.org/s/162805/) by **timgormly** | [`fs_162805_8-bit-coin1-1-wav.mp3`](music/fs_162805_8-bit-coin1-1-wav.mp3), downloaded high-quality preview | [`marvy_hit.pcm`](music/marvy_hit.pcm): 5,917 samples / 11,834 bytes / 0.3698125 seconds; coin effect. |
+| Marvy catch: [8-Bit Powerup](https://freesound.org/s/431329/) by **SomeGuy22** | [`fs_431329_8-Bit-Powerup.mp3`](music/fs_431329_8-Bit-Powerup.mp3), downloaded high-quality preview | [`marvy_bonus.pcm`](music/marvy_bonus.pcm): 8,029 samples / 16,058 bytes / 0.5018125 seconds; distinct power-up effect. |
 
-Convert from the repository root with FFmpeg:
+All three runtime files are signed 16-bit little-endian PCM at 16 kHz mono,
+with a combined size of **383,540 bytes**. Each decoded source is independently
+peak-normalized to **27,852** (85% of 16-bit full scale) before embedding. The
+MP3 previews are preparation inputs and are not compiled into firmware.
+
+Rebuild with [`music/prepare_audio.py`](music/prepare_audio.py):
 
 ```bash
-ffmpeg -hide_banner -loglevel error -y \
-  -i assets/music/fs_381316_beepbox-11.mp3 \
-  -ac 1 -ar 16000 -c:a pcm_s16le -f s16le assets/music/marvy_bgm.pcm
+python3 assets/music/prepare_audio.py
+# If FFmpeg is not on PATH:
+python3 assets/music/prepare_audio.py --ffmpeg /path/to/ffmpeg
 ```
 
-The application embeds the PCM as `marvy_bgm_pcm` and streams it from Flash
-through one 256-sample worker buffer. Runtime processing scales the background
-to 1/16 of source amplitude, fades the loop seam over 4 ms, and ramps music
-on/off over 16 ms. Original synthesized feedback cues mix over the music;
-while a cue plays, the background level is reduced to another 1/4. The audio
-worker alone owns the codec, with output volume set to 32%. Background music
-loops only during active play and stops on welcome/results screens and idle
-pause. These software levels are not a measured loudness guarantee on the
-physical speaker; final listening remains an on-device check.
+The script resolves inputs relative to itself, verifies each pinned source
+checksum, decodes with FFmpeg, normalizes the PCM, and updates processing
+metadata and hashes. FFmpeg must be installed or supplied through `--ffmpeg`;
+its actual version is recorded. No normalization is performed on the device.
+
+The application embeds `marvy_bgm_pcm`, `marvy_hit_pcm`, and `marvy_bonus_pcm`
+and streams from Flash through one **256-sample** worker buffer. Runtime BGM
+amplitude is 1/4 of normalized PCM; sampled hit amplitude is 1/3. Music loops
+with a 4 ms seam fade and uses 16 ms on/off and ducking ramps. While any cue
+plays, BGM is reduced to another 1/4. Final samples are bounded to **±16,384**,
+and the single codec-owning worker sets master volume to **65%**. Other short
+cues remain original synthesized feedback, not an official Marvy audio logo.
+BGM stops on welcome/results screens and idle pause.
+
+These software settings increase the digital output from the previous
+iteration but do not establish physical speaker loudness. Music volume,
+loop seams, effect distinction, and simultaneous score-saving playback still
+require on-device listening.
 
 ## Battery profiles
 

@@ -10,6 +10,10 @@ static const uint8_t test_music_pcm[] = {
 };
 #define MARVY_BGM_PCM_DATA test_music_pcm
 #define MARVY_BGM_PCM_BYTES sizeof(test_music_pcm)
+#define MARVY_HIT_PCM_DATA test_music_pcm
+#define MARVY_HIT_PCM_BYTES sizeof(test_music_pcm)
+#define MARVY_BONUS_PCM_DATA test_music_pcm
+#define MARVY_BONUS_PCM_BYTES sizeof(test_music_pcm)
 #include "../main/marvy_music.c"
 #include "../main/marvy_services.c"
 
@@ -134,7 +138,7 @@ esp_err_t bsp_audio_set_format(uint32_t hz, uint8_t bits, uint8_t channels)
     return test_audio_format_fail ? ESP_FAIL : ESP_OK;
 }
 
-void bsp_audio_set_volume(uint8_t volume) { assert(volume > 0 && volume <= 40); }
+void bsp_audio_set_volume(uint8_t volume) { assert(volume == 65); }
 esp_err_t bsp_audio_wake(void) { test_audio_wakes++; return test_audio_wake_fail ? ESP_FAIL : ESP_OK; }
 esp_err_t bsp_audio_sleep(void)
 {

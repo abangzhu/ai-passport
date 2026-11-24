@@ -7,6 +7,7 @@ void marvy_session_init(marvy_session_t *session, uint32_t seed, uint16_t best,
     session->now_ms = now_ms;
     session->last_input_ms = now_ms;
     session->dimmed = false;
+    session->button_held = false;
 }
 
 uint32_t marvy_session_advance(marvy_session_t *session, uint64_t target_ms)
@@ -27,6 +28,7 @@ uint32_t marvy_session_advance(marvy_session_t *session, uint64_t target_ms)
         uint32_t elapsed = (uint32_t)(active_until - session->now_ms);
         events = marvy_game_step(&session->game, elapsed);
         if (idle) {
+            marvy_session_cancel_input(session);
             session->dimmed = true;
             events |= MARVY_SESSION_EVENT_DIM;
         }
@@ -41,10 +43,28 @@ uint32_t marvy_session_press(marvy_session_t *session, uint64_t pressed_at_ms)
         return 0;
     }
     uint32_t events = marvy_session_advance(session, pressed_at_ms);
+    if (session->button_held) return events;
+    session->button_held = true;
     session->last_input_ms = pressed_at_ms;
     if (session->dimmed) {
         session->dimmed = false;
         return events | MARVY_SESSION_EVENT_WAKE;
     }
     return events | marvy_game_press(&session->game);
+}
+
+uint32_t marvy_session_release(marvy_session_t *session, uint64_t released_at_ms)
+{
+    if (released_at_ms < session->now_ms) return 0;
+    uint32_t events = marvy_session_advance(session, released_at_ms);
+    if (!session->button_held) return events;
+    session->button_held = false;
+    session->last_input_ms = released_at_ms;
+    return events | marvy_game_release(&session->game);
+}
+
+void marvy_session_cancel_input(marvy_session_t *session)
+{
+    session->button_held = false;
+    marvy_game_cancel_charge(&session->game);
 }

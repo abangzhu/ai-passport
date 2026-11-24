@@ -2,237 +2,201 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
-
 #include "marvy_session.h"
 
 static void start(marvy_session_t *session, uint64_t now_ms)
 {
     marvy_session_init(session, 1, 7, now_ms);
-    assert(session->now_ms == now_ms && session->last_input_ms == now_ms);
-    assert(!session->dimmed);
     assert(marvy_session_press(session, now_ms) == MARVY_EVENT_START);
+    assert(marvy_session_release(session, now_ms) == 0);
+    assert(!session->button_held && !session->dimmed);
 }
 
 static void clear_lane(marvy_session_t *session)
 {
-    for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) {
-        session->game.sheep[i].hidden_ms = 100000;
-    }
+    for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) session->game.sheep[i].hidden_ms = 100000;
 }
 
-static void test_event_time_before_landing_and_feedback_boundaries(void)
+static void test_welcome_requires_press_and_release_cannot_throw(void)
 {
-    marvy_session_t session;
-    start(&session, 0);
-    clear_lane(&session);
-    assert(marvy_session_press(&session, 100) == MARVY_EVENT_THROW);
-    assert(marvy_session_press(&session, 699) == 0);
-    assert(session.game.ring_state == MARVY_RING_FLYING);
-    assert(session.game.ring_ms == MARVY_FLIGHT_MS - 1);
-    assert(session.game.rings_left == 9);
-    assert(marvy_session_advance(&session, 700) == MARVY_EVENT_MISS);
-    assert(marvy_session_press(&session, 1099) == 0);
-    assert(session.game.ring_state == MARVY_RING_FEEDBACK);
-    assert(session.game.ring_ms == MARVY_FEEDBACK_MS - 1);
-    assert(session.game.rings_left == 9);
-    assert(marvy_session_advance(&session, 1100) == 0);
-    assert(session.game.ring_state == MARVY_RING_READY);
-    assert(marvy_session_press(&session, 1101) == MARVY_EVENT_THROW);
-    assert(session.game.rings_left == 8);
+    marvy_session_t s;
+    marvy_session_init(&s, 1, 7, 0);
+    assert(marvy_session_advance(&s, 44000) == 0);
+    assert(s.game.phase == MARVY_PHASE_INTRO);
+    assert(marvy_session_release(&s, 44000) == 0 && s.game.phase == MARVY_PHASE_INTRO);
+    assert(marvy_session_press(&s, 44001) == MARVY_EVENT_START);
+    assert(s.button_held && s.game.phase == MARVY_PHASE_PLAYING);
+    clear_lane(&s);
+    assert(marvy_session_press(&s, 44002) == 0);
+    assert(marvy_session_release(&s, 44003) == 0);
+    assert(s.game.rings_left == 10 && s.game.ring_state == MARVY_RING_READY);
 }
 
-static void test_last_feedback_press_does_not_restart_but_new_press_does(void)
+static void test_press_release_timestamps_control_distance(void)
 {
-    marvy_session_t session;
-    start(&session, 0);
-    clear_lane(&session);
-    session.game.rings_left = 1;
-    assert(marvy_session_press(&session, 100) == MARVY_EVENT_THROW);
-    uint32_t events = marvy_session_press(&session, 1099);
-    assert(events == MARVY_EVENT_MISS);
-    assert(session.game.phase == MARVY_PHASE_PLAYING);
-    assert(session.game.rings_left == 0);
-    assert(marvy_session_advance(&session, 1100) == MARVY_EVENT_FINISH);
-    assert(session.game.phase == MARVY_PHASE_RESULTS);
-    assert(marvy_session_press(&session, 1101) == MARVY_EVENT_START);
-    assert(session.game.phase == MARVY_PHASE_PLAYING);
-    assert(session.game.rings_left == MARVY_RING_COUNT);
+    marvy_session_t s;
+    start(&s, 0); clear_lane(&s);
+    assert(marvy_session_press(&s, 100) == 0);
+    assert(s.game.ring_state == MARVY_RING_CHARGING && s.game.rings_left == 10);
+    assert(marvy_session_release(&s, 800) == MARVY_EVENT_THROW);
+    assert(s.game.ring_target_x == 120 && s.game.rings_left == 9 && !s.button_held);
+    assert(marvy_session_release(&s, 801) == 0);
+    assert(marvy_session_advance(&s, 1399) == 0);
+    assert(s.game.ring_state == MARVY_RING_FLYING && s.game.ring_ms == 599);
+    assert(marvy_session_advance(&s, 1400) == MARVY_EVENT_MISS);
+    assert(marvy_session_press(&s, 1799) == 0);
+    assert(s.game.ring_state == MARVY_RING_FEEDBACK);
+    assert(marvy_session_release(&s, 1801) == 0);
+    assert(s.game.ring_state == MARVY_RING_READY && s.game.rings_left == 9);
+    assert(marvy_session_press(&s, 1802) == 0);
+    assert(marvy_session_release(&s, 1802) == MARVY_EVENT_THROW);
+    assert(s.game.ring_target_x == 32 && s.game.rings_left == 8);
 }
 
-static void test_press_can_complete_a_landing_before_its_action(void)
+static void test_repeated_press_does_not_restart_charge(void)
 {
-    marvy_session_t session;
-    start(&session, 0);
-    clear_lane(&session);
-    marvy_session_press(&session, 10);
-    uint32_t events = marvy_session_press(&session, 1010);
-    assert(events == (MARVY_EVENT_MISS | MARVY_EVENT_THROW));
-    assert(session.game.ring_state == MARVY_RING_FLYING);
-    assert(session.game.ring_ms == 0 && session.game.rings_left == 8);
+    marvy_session_t s;
+    start(&s, 0); clear_lane(&s);
+    marvy_session_press(&s, 10);
+    assert(marvy_session_press(&s, 710) == 0);
+    assert(s.game.ring_ms == 700 && s.last_input_ms == 10);
+    assert(marvy_session_release(&s, 1410) == MARVY_EVENT_THROW);
+    assert(s.game.ring_target_x == 208 && s.game.rings_left == 9);
 }
 
-static void test_last_marvy_catch_keeps_extended_greeting_before_restart(void)
+static void test_last_feedback_input_does_not_restart_or_accidentally_throw(void)
 {
-    marvy_session_t session;
-    start(&session, 0);
-    clear_lane(&session);
-    session.game.best_score = 0;
-    session.game.rings_left = 1;
-    session.game.sheep[0].x = MARVY_AIM_X;
-    session.game.sheep[0].speed = 0;
-    session.game.sheep[0].marvy = true;
-    session.game.sheep[0].announced = true;
-    session.game.sheep[0].hidden_ms = 0;
-    assert(marvy_session_press(&session, 100) == MARVY_EVENT_THROW);
-    uint32_t events = marvy_session_press(&session, 1899);
-    assert(events == (MARVY_EVENT_HIT | MARVY_EVENT_MARVY_HIT));
-    assert(session.game.phase == MARVY_PHASE_PLAYING);
-    assert(session.game.ring_state == MARVY_RING_FEEDBACK);
-    assert(session.game.ring_ms == 1199 && session.game.score == 5);
-    assert(session.game.rings_left == 0 && session.game.sheep[0].hidden_ms == 501);
-    events = marvy_session_advance(&session, 1900);
-    assert(events == (MARVY_EVENT_FINISH | MARVY_EVENT_NEW_BEST));
-    assert(session.game.phase == MARVY_PHASE_RESULTS && session.game.best_score == 5);
-    assert(marvy_session_press(&session, 1901) == MARVY_EVENT_START);
-    assert(session.game.phase == MARVY_PHASE_PLAYING && session.game.rings_left == 10);
-    assert(session.game.score == 0 && session.game.best_score == 5);
+    marvy_session_t s;
+    start(&s, 0); clear_lane(&s); s.game.rings_left = 1;
+    marvy_session_press(&s, 100);
+    assert(marvy_session_release(&s, 100) == MARVY_EVENT_THROW);
+    assert(marvy_session_press(&s, 1099) == MARVY_EVENT_MISS);
+    assert(s.game.phase == MARVY_PHASE_PLAYING && s.game.rings_left == 0);
+    assert(marvy_session_release(&s, 1100) == MARVY_EVENT_FINISH);
+    assert(s.game.phase == MARVY_PHASE_RESULTS);
+    assert(marvy_session_press(&s, 1101) == MARVY_EVENT_START);
+    assert(marvy_session_release(&s, 1200) == 0);
+    assert(s.game.phase == MARVY_PHASE_PLAYING && s.game.rings_left == 10);
+    assert(s.game.ring_state == MARVY_RING_READY);
 }
 
-static void test_idle_deadline_is_exact_and_sheep_pause(void)
+static void test_last_marvy_greeting_keeps_full_duration(void)
 {
-    marvy_session_t session, reference;
-    start(&session, 1000);
-    reference = session;
-    uint32_t events = marvy_session_advance(&session, 45999);
-    assert((events & MARVY_SESSION_EVENT_DIM) == 0 && !session.dimmed);
-    events = marvy_session_advance(&session, 46000);
-    assert((events & MARVY_SESSION_EVENT_DIM) != 0 && session.dimmed);
-    marvy_game_step(&reference.game, MARVY_SESSION_IDLE_MS);
-    for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) {
-        assert(fabsf(reference.game.sheep[i].x - session.game.sheep[i].x) < 0.05f);
-    }
-    marvy_game_t paused = session.game;
-    assert(marvy_session_advance(&session, 5000000) == 0);
-    assert(session.now_ms == 5000000 && session.dimmed);
-    assert(session.game.phase_ms == paused.phase_ms);
-    for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) {
-        assert(session.game.sheep[i].x == paused.sheep[i].x);
-    }
+    marvy_session_t s;
+    start(&s, 0); clear_lane(&s);
+    s.game.best_score = 0; s.game.rings_left = 1;
+    marvy_session_press(&s, 100);
+    s.game.sheep[0].x = 32; s.game.sheep[0].speed = 0;
+    s.game.sheep[0].marvy = true; s.game.sheep[0].announced = true;
+    s.game.sheep[0].hidden_ms = 0;
+    assert(marvy_session_release(&s, 100) == MARVY_EVENT_THROW);
+    assert(marvy_session_press(&s, 1899) == (MARVY_EVENT_HIT | MARVY_EVENT_MARVY_HIT));
+    assert(s.game.phase == MARVY_PHASE_PLAYING && s.game.ring_ms == 1199);
+    assert(s.game.score == 5 && s.game.sheep[0].hidden_ms == 501);
+    assert(marvy_session_release(&s, 1900) == (MARVY_EVENT_FINISH | MARVY_EVENT_NEW_BEST));
+    assert(s.game.phase == MARVY_PHASE_RESULTS && s.game.best_score == 5);
+    assert(marvy_session_press(&s, 1901) == MARVY_EVENT_START);
+    assert(marvy_session_release(&s, 2000) == 0 && s.game.rings_left == 10);
 }
 
-static void test_first_idle_press_wakes_without_throwing(void)
+static void test_idle_cancels_charge_and_release_cannot_wake_or_throw(void)
 {
-    marvy_session_t session;
-    start(&session, 0);
-    marvy_session_advance(&session, MARVY_SESSION_IDLE_MS);
-    assert(session.dimmed);
-    uint32_t events = marvy_session_press(&session, 60000);
-    assert(events == MARVY_SESSION_EVENT_WAKE);
-    assert(!session.dimmed && session.last_input_ms == 60000);
-    assert(session.game.ring_state == MARVY_RING_READY);
-    assert(session.game.rings_left == MARVY_RING_COUNT);
-    assert(marvy_session_press(&session, 60001) == MARVY_EVENT_THROW);
-    assert(session.game.rings_left == MARVY_RING_COUNT - 1);
+    marvy_session_t s;
+    start(&s, 0); clear_lane(&s);
+    marvy_session_press(&s, 100);
+    marvy_session_advance(&s, 45099);
+    assert(!s.dimmed && s.button_held && s.game.ring_state == MARVY_RING_CHARGING);
+    assert(marvy_session_advance(&s, 45100) == MARVY_SESSION_EVENT_DIM);
+    assert(s.dimmed && !s.button_held && s.game.ring_state == MARVY_RING_READY);
+    assert(s.game.rings_left == 10);
+    assert(marvy_session_release(&s, 45101) == 0 && s.dimmed);
+    marvy_game_t paused=s.game;
+    assert(marvy_session_advance(&s, 5000000) == 0);
+    assert(s.game.phase_ms == paused.phase_ms);
+    for (unsigned i=0;i<MARVY_SHEEP_COUNT;++i) assert(s.game.sheep[i].x == paused.sheep[i].x);
+    assert(marvy_session_press(&s, 5000001) == MARVY_SESSION_EVENT_WAKE);
+    assert(!s.dimmed && s.button_held);
+    assert(marvy_session_release(&s, 5000100) == 0);
+    assert(s.game.rings_left == 10 && s.game.ring_state == MARVY_RING_READY);
+    marvy_session_press(&s, 5000200);
+    assert(marvy_session_release(&s, 5000900) == MARVY_EVENT_THROW);
+    assert(s.game.ring_target_x == 120 && s.game.rings_left == 9);
 }
 
-static void test_a_press_at_idle_cutoff_only_wakes(void)
+static void test_cancel_input_is_fail_closed_without_canceling_flight(void)
 {
-    marvy_session_t session;
-    start(&session, 0);
-    uint32_t events = marvy_session_press(&session, MARVY_SESSION_IDLE_MS);
-    assert((events & MARVY_SESSION_EVENT_WAKE) != 0);
-    assert((events & MARVY_EVENT_THROW) == 0);
-    assert(!session.dimmed && session.game.rings_left == MARVY_RING_COUNT);
+    marvy_session_t s;
+    start(&s, 0); clear_lane(&s);
+    marvy_session_press(&s, 10); marvy_session_advance(&s, 710);
+    marvy_session_cancel_input(&s);
+    assert(!s.button_held && s.game.ring_state == MARVY_RING_READY && s.game.rings_left == 10);
+    assert(marvy_session_release(&s, 711) == 0);
+    marvy_session_press(&s, 800);
+    assert(marvy_session_release(&s, 800) == MARVY_EVENT_THROW);
+    marvy_session_cancel_input(&s);
+    assert(s.game.ring_state == MARVY_RING_FLYING && s.game.rings_left == 9);
+    assert(marvy_session_advance(&s, 1400) == MARVY_EVENT_MISS);
 }
 
-static void test_first_idle_press_does_not_restart_results(void)
+static void test_wake_in_welcome_or_results_never_starts_on_release(void)
 {
-    marvy_session_t session;
-    start(&session, 0);
-    clear_lane(&session);
-    session.game.rings_left = 1;
-    marvy_session_press(&session, 10);
-    marvy_session_advance(&session, 1010);
-    assert(session.game.phase == MARVY_PHASE_RESULTS);
-    marvy_session_advance(&session, 50000);
-    assert(session.dimmed);
-    assert(marvy_session_press(&session, 50001) == MARVY_SESSION_EVENT_WAKE);
-    assert(session.game.phase == MARVY_PHASE_RESULTS);
-    assert(session.game.rings_left == 0);
-    assert(marvy_session_press(&session, 50002) == MARVY_EVENT_START);
-    assert(session.game.phase == MARVY_PHASE_PLAYING);
+    marvy_session_t s;
+    marvy_session_init(&s,1,7,0);
+    assert(marvy_session_advance(&s, 50000) == MARVY_SESSION_EVENT_DIM);
+    assert(s.game.phase == MARVY_PHASE_INTRO);
+    assert(marvy_session_press(&s,50001)==MARVY_SESSION_EVENT_WAKE);
+    assert(marvy_session_release(&s,50002)==0 && s.game.phase==MARVY_PHASE_INTRO);
+    assert(marvy_session_press(&s,50003)==MARVY_EVENT_START);
+    marvy_session_release(&s,50004); clear_lane(&s); s.game.rings_left=1;
+    marvy_session_press(&s,50010); marvy_session_release(&s,50010);
+    marvy_session_advance(&s,51010);
+    assert(s.game.phase==MARVY_PHASE_RESULTS);
+    marvy_session_advance(&s,100000);
+    assert(s.dimmed);
+    assert(marvy_session_press(&s,100001)==MARVY_SESSION_EVENT_WAKE);
+    assert(marvy_session_release(&s,100002)==0 && s.game.phase==MARVY_PHASE_RESULTS);
 }
 
-static void test_ignored_game_press_still_resets_idle_timer(void)
+static void test_stale_events_cannot_release_or_change_a_charge(void)
 {
-    marvy_session_t session;
-    start(&session, 0);
-    clear_lane(&session);
-    marvy_session_press(&session, 44000);
-    assert(marvy_session_press(&session, 44001) == 0);
-    assert(session.last_input_ms == 44001);
-    marvy_session_advance(&session, 89000);
-    assert(!session.dimmed);
-    assert((marvy_session_advance(&session, 89001) & MARVY_SESSION_EVENT_DIM) != 0);
+    marvy_session_t s;
+    start(&s,100); clear_lane(&s);
+    marvy_session_press(&s,200); marvy_session_advance(&s,900);
+    assert(marvy_session_release(&s,899)==0 && s.button_held);
+    assert(marvy_session_press(&s,899)==0 && s.game.ring_ms==700);
+    assert(marvy_session_advance(&s,899)==0 && s.now_ms==900);
+    assert(marvy_session_release(&s,900)==MARVY_EVENT_THROW);
+    assert(s.game.ring_target_x==120);
 }
 
-static void test_clock_rollback_and_stale_press_are_ignored(void)
+static void test_uint64_timestamps_and_huge_frames_do_not_wrap(void)
 {
-    marvy_session_t session;
-    start(&session, 100);
-    clear_lane(&session);
-    marvy_session_advance(&session, 1000);
-    marvy_game_t before = session.game;
-    assert(marvy_session_advance(&session, 999) == 0);
-    assert(marvy_session_press(&session, 999) == 0);
-    assert(session.now_ms == 1000 && session.last_input_ms == 100);
-    assert(session.game.phase_ms == before.phase_ms);
-    assert(session.game.rings_left == before.rings_left);
-    assert(marvy_session_press(&session, 1000) == MARVY_EVENT_THROW);
-    assert(session.last_input_ms == 1000);
-}
-
-static void test_uint64_timestamps_do_not_wrap_or_overflow(void)
-{
-    marvy_session_t session;
-    start(&session, UINT64_MAX - 40000);
-    marvy_session_advance(&session, UINT64_MAX);
-    assert(!session.dimmed && session.now_ms == UINT64_MAX);
-    assert(marvy_session_press(&session, 0) == 0);
-    assert(session.now_ms == UINT64_MAX);
-    start(&session, UINT64_MAX - MARVY_SESSION_IDLE_MS);
-    assert((marvy_session_advance(&session, UINT64_MAX) & MARVY_SESSION_EVENT_DIM) != 0);
-    assert(session.dimmed);
-    assert(marvy_session_press(&session, UINT64_MAX) == MARVY_SESSION_EVENT_WAKE);
-    assert(!session.dimmed);
-}
-
-static void test_huge_frame_advances_only_to_idle_cutoff(void)
-{
-    marvy_session_t session;
-    marvy_session_init(&session, 1, 7, 0);
-    uint32_t events = marvy_session_advance(&session, UINT64_MAX);
-    assert((events & MARVY_EVENT_START) != 0);
-    assert((events & MARVY_SESSION_EVENT_DIM) != 0);
-    assert(session.game.phase_ms == MARVY_SESSION_IDLE_MS - MARVY_INTRO_MS);
-    assert(session.now_ms == UINT64_MAX && session.dimmed);
-    assert(marvy_session_advance(&session, UINT64_MAX) == 0);
+    marvy_session_t s;
+    start(&s,UINT64_MAX-40000);
+    marvy_session_advance(&s,UINT64_MAX);
+    assert(!s.dimmed && s.now_ms==UINT64_MAX);
+    assert(marvy_session_press(&s,0)==0 && marvy_session_release(&s,0)==0);
+    start(&s,UINT64_MAX-MARVY_SESSION_IDLE_MS);
+    assert((marvy_session_advance(&s,UINT64_MAX)&MARVY_SESSION_EVENT_DIM)!=0);
+    assert(marvy_session_press(&s,UINT64_MAX)==MARVY_SESSION_EVENT_WAKE);
+    assert(marvy_session_release(&s,UINT64_MAX)==0);
+    marvy_session_init(&s,1,7,0);
+    assert(marvy_session_advance(&s,UINT64_MAX)==MARVY_SESSION_EVENT_DIM);
+    assert(s.game.phase==MARVY_PHASE_INTRO && s.now_ms==UINT64_MAX);
 }
 
 int main(void)
 {
-    test_event_time_before_landing_and_feedback_boundaries();
-    test_last_feedback_press_does_not_restart_but_new_press_does();
-    test_press_can_complete_a_landing_before_its_action();
-    test_last_marvy_catch_keeps_extended_greeting_before_restart();
-    test_idle_deadline_is_exact_and_sheep_pause();
-    test_first_idle_press_wakes_without_throwing();
-    test_a_press_at_idle_cutoff_only_wakes();
-    test_first_idle_press_does_not_restart_results();
-    test_ignored_game_press_still_resets_idle_timer();
-    test_clock_rollback_and_stale_press_are_ignored();
-    test_uint64_timestamps_do_not_wrap_or_overflow();
-    test_huge_frame_advances_only_to_idle_cutoff();
-    puts("Marvy session tests: PASS");
+    test_welcome_requires_press_and_release_cannot_throw();
+    test_press_release_timestamps_control_distance();
+    test_repeated_press_does_not_restart_charge();
+    test_last_feedback_input_does_not_restart_or_accidentally_throw();
+    test_last_marvy_greeting_keeps_full_duration();
+    test_idle_cancels_charge_and_release_cannot_wake_or_throw();
+    test_cancel_input_is_fail_closed_without_canceling_flight();
+    test_wake_in_welcome_or_results_never_starts_on_release();
+    test_stale_events_cannot_release_or_change_a_charge();
+    test_uint64_timestamps_and_huge_frames_do_not_wrap();
+    puts("Marvy charge input/session tests: PASS");
     return 0;
 }

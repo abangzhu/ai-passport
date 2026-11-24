@@ -20,8 +20,8 @@ uint16_t marvy_services_best_score(void);
 void marvy_services_save_best(uint16_t score);
 
 /* Non-blocking, latest cue wins. Feedback is mixed over ducked background
- * music by the same worker, never by a second codec owner. Cue motifs remain
- * original synthesized prototypes, not an approved Marvy sound logo. */
+ * music by the same worker, never by a second codec owner. Ordinary and Marvy
+ * hits use distinct licensed samples; other cues retain synthesized motifs. */
 void marvy_services_play(marvy_sound_t sound);
 
 /* Non-blocking music gate. Enable for active gameplay; disable on welcome,

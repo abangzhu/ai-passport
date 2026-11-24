@@ -1,0 +1,91 @@
+{
+  "version": "0.3.0",
+  "assets": {
+    "bgm": {
+      "freesound_id": 749008,
+      "title": "adventure",
+      "author": "solarpsychedelic",
+      "source_page": "https://freesound.org/s/749008/",
+      "downloaded_preview": "https://cdn.freesound.org/previews/749/749008_8645255-hq.mp3",
+      "source_file": "fs_749008_adventure.mp3",
+      "source_sha256": "8e87562b094fd3994c0f212efc67433d71f4d3b2fb48fc16036f42bb1fb36b1b",
+      "license": "CC0 1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "retrieved_on": "2026-11-24",
+      "downloads_at_retrieval": 44,
+      "rating_snapshot": "\u219344 \u2605-",
+      "author_description": "Cheerful chiptune for an optimistic character going on an adventure. Made with Beepbox.",
+      "decoded_peak_before_normalization": 1848,
+      "decoded_rms_before_normalization": 544.2324384127149,
+      "pcm": {
+        "file": "marvy_bgm.pcm",
+        "format": "signed 16-bit little-endian mono PCM",
+        "sample_rate": 16000,
+        "samples": 177824,
+        "duration_seconds": 11.114,
+        "bytes": 355648,
+        "peak": 27852
+      },
+      "pcm_sha256": "c2fac907192801b17d66ae82be2e7ebc32f3f8f578968311503ad6ca7b145e33"
+    },
+    "ordinary_hit": {
+      "freesound_id": 162805,
+      "title": "8-bit coin1.1.wav",
+      "author": "timgormly",
+      "source_page": "https://freesound.org/s/162805/",
+      "downloaded_preview": "https://cdn.freesound.org/previews/162/162805_2578041-hq.mp3",
+      "source_file": "fs_162805_8-bit-coin1-1-wav.mp3",
+      "source_sha256": "4b0073f0aae112f44be1cfee307c40b2b0de78395723346bdf8510d9515450bf",
+      "license": "CC0 1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "retrieved_on": "2026-11-24",
+      "downloads_at_retrieval": 2597,
+      "rating_snapshot": "\u21932597 \u26054.6(24)",
+      "author_description": "One shot sample of an 8-bit \"coin\" sound effect. Potentially useful in retro/8-bit video g",
+      "decoded_peak_before_normalization": 32768,
+      "decoded_rms_before_normalization": 21950.615551680654,
+      "pcm": {
+        "file": "marvy_hit.pcm",
+        "format": "signed 16-bit little-endian mono PCM",
+        "sample_rate": 16000,
+        "samples": 5917,
+        "duration_seconds": 0.3698125,
+        "bytes": 11834,
+        "peak": 27852
+      },
+      "pcm_sha256": "6340223306ac1dcaae9266c7e7a1e0cb29a3629ff3e2836ed5b2e00c294a35b0"
+    },
+    "marvy_hit": {
+      "freesound_id": 431329,
+      "title": "8-Bit Powerup",
+      "author": "SomeGuy22",
+      "source_page": "https://freesound.org/s/431329/",
+      "downloaded_preview": "https://cdn.freesound.org/previews/431/431329_2711716-hq.mp3",
+      "source_file": "fs_431329_8-Bit-Powerup.mp3",
+      "source_sha256": "07a83ea16aabc8bd39b3f9221cf75068137d8c801c1523919f44d3f1ab2db4f2",
+      "license": "CC0 1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "retrieved_on": "2026-11-24",
+      "downloads_at_retrieval": 3899,
+      "rating_snapshot": "\u21933899 \u26054.8(34)",
+      "author_description": "A powerup for acquiring a collectable in an old-school 8-Bit game. Generated with a sine w",
+      "decoded_peak_before_normalization": 20769,
+      "decoded_rms_before_normalization": 8883.2691437841,
+      "pcm": {
+        "file": "marvy_bonus.pcm",
+        "format": "signed 16-bit little-endian mono PCM",
+        "sample_rate": 16000,
+        "samples": 8029,
+        "duration_seconds": 0.5018125,
+        "bytes": 16058,
+        "peak": 27852
+      },
+      "pcm_sha256": "49c508e043d927f285dfa83dc5ad0b384bf9eba907cbad759c0ac39149574fc4"
+    }
+  },
+  "selection": "Cheerful Beepbox chiptune for active gameplay; ordinary sheep gets a short coin sound, Marvy sheep gets a distinct power-up sound. All three are CC0. Popular but battle-oriented or very long tracks were rejected for fit.",
+  "preparation_command": "python3 assets/music/prepare_audio.py",
+  "normalization": "Decode each source with ffmpeg to 16 kHz mono signed 16-bit PCM, then peak normalize independently to 27852 (85% full scale) with the checked-in script. No runtime normalization or extra PCM allocation.",
+  "runtime_mix": "BGM divide by 4; sampled hit divide by 3; BGM ducks to one quarter under effects, with 16 ms ramps. Final mixed samples bounded to +/-16384. Codec master volume 65%.",
+  "conversion_tool": "ffmpeg version 7.1.1 Copyright (c) 2000-2025 the FFmpeg developers"
+}

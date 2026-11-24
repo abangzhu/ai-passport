@@ -51,6 +51,7 @@ static void start_round(marvy_game_t *game)
     game->rings_left = MARVY_RING_COUNT;
     game->phase_ms = 0;
     game->ring_ms = 0;
+    game->ring_target_x = MARVY_TARGET_MIN_X;
     game->last_points = 0;
     game->last_hit_x = MARVY_AIM_X;
     game->last_hit_marvy = false;
@@ -91,13 +92,39 @@ uint32_t marvy_game_press(marvy_game_t *game)
     if (game->ring_state != MARVY_RING_READY || game->rings_left == 0) {
         return 0;
     }
-    --game->rings_left;
-    game->ring_state = MARVY_RING_FLYING;
+    game->ring_state = MARVY_RING_CHARGING;
     game->ring_ms = 0;
+    game->ring_target_x = MARVY_TARGET_MIN_X;
     game->last_points = 0;
     game->last_hit_sheep = -1;
     game->last_hit_marvy = false;
+    return 0;
+}
+
+float marvy_game_charge_target_x(uint32_t held_ms)
+{
+    if (held_ms >= MARVY_CHARGE_MS) return MARVY_TARGET_MAX_X;
+    return MARVY_TARGET_MIN_X +
+           (MARVY_TARGET_MAX_X - MARVY_TARGET_MIN_X) * ((float)held_ms / MARVY_CHARGE_MS);
+}
+
+uint32_t marvy_game_release(marvy_game_t *game)
+{
+    if (game->phase != MARVY_PHASE_PLAYING ||
+        game->ring_state != MARVY_RING_CHARGING || game->rings_left == 0) return 0;
+    game->ring_target_x = marvy_game_charge_target_x(game->ring_ms);
+    --game->rings_left;
+    game->ring_ms = 0;
+    game->ring_state = MARVY_RING_FLYING;
     return MARVY_EVENT_THROW;
+}
+
+void marvy_game_cancel_charge(marvy_game_t *game)
+{
+    if (game->ring_state != MARVY_RING_CHARGING) return;
+    game->ring_state = MARVY_RING_READY;
+    game->ring_ms = 0;
+    game->ring_target_x = MARVY_TARGET_MIN_X;
 }
 
 uint32_t marvy_game_feedback_ms(const marvy_game_t *game)
@@ -140,7 +167,7 @@ static uint32_t resolve_landing(marvy_game_t *game)
     float distance = FLT_MAX;
     for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) {
         const marvy_sheep_t *sheep = &game->sheep[i];
-        float delta = sheep->x - MARVY_AIM_X;
+        float delta = sheep->x - game->ring_target_x;
         if (delta < 0) {
             delta = -delta;
         }
@@ -189,25 +216,11 @@ uint32_t marvy_game_step(marvy_game_t *game, uint32_t elapsed_ms)
     }
     while (elapsed_ms > 0) {
         uint32_t slice = elapsed_ms < SIMULATION_SLICE_MS ? elapsed_ms : SIMULATION_SLICE_MS;
-        if (game->phase == MARVY_PHASE_RESULTS) {
+        if (game->phase == MARVY_PHASE_RESULTS || game->phase == MARVY_PHASE_INTRO) {
             game->phase_ms = saturated_add(game->phase_ms, elapsed_ms);
             break;
         }
-        if (game->phase == MARVY_PHASE_INTRO) {
-            uint32_t remaining = MARVY_INTRO_MS - game->phase_ms;
-            if (slice > remaining) {
-                slice = remaining;
-            }
-            game->phase_ms += slice;
-            elapsed_ms -= slice;
-            if (game->phase_ms == MARVY_INTRO_MS) {
-                game->phase = MARVY_PHASE_PLAYING;
-                game->phase_ms = 0;
-                events |= MARVY_EVENT_START;
-            }
-            continue;
-        }
-        if (game->ring_state != MARVY_RING_READY) {
+        if (game->ring_state == MARVY_RING_FLYING || game->ring_state == MARVY_RING_FEEDBACK) {
             uint32_t duration = game->ring_state == MARVY_RING_FLYING ?
                                 MARVY_FLIGHT_MS : marvy_game_feedback_ms(game);
             uint32_t remaining = duration - game->ring_ms;
@@ -218,7 +231,10 @@ uint32_t marvy_game_step(marvy_game_t *game, uint32_t elapsed_ms)
         events |= move_sheep(game, slice);
         game->phase_ms = saturated_add(game->phase_ms, slice);
         elapsed_ms -= slice;
-        if (game->ring_state == MARVY_RING_FLYING) {
+        if (game->ring_state == MARVY_RING_CHARGING) {
+            game->ring_ms = game->ring_ms + slice > MARVY_CHARGE_MS
+                            ? MARVY_CHARGE_MS : game->ring_ms + slice;
+        } else if (game->ring_state == MARVY_RING_FLYING) {
             game->ring_ms += slice;
             if (game->ring_ms == MARVY_FLIGHT_MS) {
                 events |= resolve_landing(game);

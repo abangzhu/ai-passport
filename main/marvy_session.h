@@ -13,6 +13,7 @@ typedef struct {
     uint64_t now_ms;
     uint64_t last_input_ms;
     bool dimmed;
+    bool button_held;
 } marvy_session_t;
 
 /* A session owns its game and accepts monotonic, absolute millisecond times.
@@ -29,3 +30,11 @@ uint32_t marvy_session_advance(marvy_session_t *session, uint64_t target_ms);
  * than the session clock is ignored. The first press after idle only wakes the
  * display and never skips the intro, throws a ring, or restarts the results. */
 uint32_t marvy_session_press(marvy_session_t *session, uint64_t pressed_at_ms);
+
+/* Apply the matching release at its captured timestamp. Unpaired/old releases
+ * cannot spend a ring or wake the display. Repeat presses require a release. */
+uint32_t marvy_session_release(marvy_session_t *session, uint64_t released_at_ms);
+
+/* Recover from lost/overflowed input without inventing a throw. The caller
+ * should also discard any queued edges whose pairing is no longer known. */
+void marvy_session_cancel_input(marvy_session_t *session);

@@ -19,6 +19,18 @@ extern const uint8_t marvy_bgm_pcm_end[] __asm__("_binary_marvy_bgm_pcm_end");
 #define MARVY_BGM_PCM_DATA marvy_bgm_pcm_start
 #define MARVY_BGM_PCM_BYTES ((size_t)(marvy_bgm_pcm_end - marvy_bgm_pcm_start))
 #endif
+#ifndef MARVY_HIT_PCM_DATA
+extern const uint8_t marvy_hit_pcm_start[] __asm__("_binary_marvy_hit_pcm_start");
+extern const uint8_t marvy_hit_pcm_end[] __asm__("_binary_marvy_hit_pcm_end");
+#define MARVY_HIT_PCM_DATA marvy_hit_pcm_start
+#define MARVY_HIT_PCM_BYTES ((size_t)(marvy_hit_pcm_end - marvy_hit_pcm_start))
+#endif
+#ifndef MARVY_BONUS_PCM_DATA
+extern const uint8_t marvy_bonus_pcm_start[] __asm__("_binary_marvy_bonus_pcm_start");
+extern const uint8_t marvy_bonus_pcm_end[] __asm__("_binary_marvy_bonus_pcm_end");
+#define MARVY_BONUS_PCM_DATA marvy_bonus_pcm_start
+#define MARVY_BONUS_PCM_BYTES ((size_t)(marvy_bonus_pcm_end - marvy_bonus_pcm_start))
+#endif
 
 static const char *TAG = "marvy_services";
 static QueueHandle_t s_sounds;
@@ -166,7 +178,7 @@ static void services_worker(void *arg)
         s_audio_attempted = true;
         s_audio_ready = bsp_audio_init() == ESP_OK;
         if (s_audio_ready) {
-            bsp_audio_set_volume(32);
+            bsp_audio_set_volume(65);
             s_audio_ready = bsp_audio_sleep() == ESP_OK;
         }
         if (!s_audio_ready) ESP_LOGW(TAG, "Audio init unavailable; score storage remains active");
@@ -205,6 +217,8 @@ bool marvy_services_start(void)
     s_sounds = xQueueCreate(1, sizeof(marvy_sound_t));
     if (!s_sounds) return false;
     marvy_music_init(&s_mixer, MARVY_BGM_PCM_DATA, MARVY_BGM_PCM_BYTES);
+    marvy_music_set_hit_samples(&s_mixer, MARVY_HIT_PCM_DATA, MARVY_HIT_PCM_BYTES,
+                                MARVY_BONUS_PCM_DATA, MARVY_BONUS_PCM_BYTES);
     if (xTaskCreate(services_worker, "marvy_services", 3072, NULL, 4, &s_task) != pdPASS) {
         vQueueDelete(s_sounds);
         s_sounds = NULL;

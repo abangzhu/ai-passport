@@ -21,9 +21,11 @@
 | --- | --- |
 | [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | 未修改的 Noto Sans SC Regular 源字体，用于可复现子集生成；不编译进固件。 |
 | [`fonts/OFL.txt`](fonts/OFL.txt) | 源字体的 SIL Open Font License 1.1 与版权声明；再分发字体资源时应保留。 |
-| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | 去重、排序后的 48 个固定中文界面字符清单。两个尺寸还包含 95 个可打印 ASCII 字符 U+0020–U+007E。 |
-| [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px、4 bpp、未压缩的 LVGL 位图字库，用于标签和提示；导出符号 `marvy_font_16`。 |
-| [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px、4 bpp、未压缩的 LVGL 位图字库，用于标题；导出符号 `marvy_font_20`。 |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | 去重、排序后的 53 个固定中文界面字符清单。四份字库都包含 95 个可打印 ASCII 字符 U+0020–U+007E，每份共 148 个字形。 |
+| [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px、4 bpp、未压缩的平滑 LVGL 位图字库，用于欢迎页文字；导出符号 `marvy_font_16`。 |
+| [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px、4 bpp、未压缩的平滑 LVGL 位图字库，用于欢迎页标题；导出符号 `marvy_font_20`。 |
+| [`fonts/marvy_pixel_16.c`](fonts/marvy_pixel_16.c) | 16 px、1 bpp、未压缩的硬边 LVGL 位图字库，用于游戏 HUD 与提示；导出符号 `marvy_pixel_16`。 |
+| [`fonts/marvy_pixel_20.c`](fonts/marvy_pixel_20.c) | 20 px、1 bpp、未压缩的硬边 LVGL 位图字库，用于游戏与结算页标题、祝福文字；导出符号 `marvy_pixel_20`。 |
 
 来源：[Noto CJK 官方仓库](https://github.com/notofonts/noto-cjk)，
 [`Sans/SubsetOTF/SC/NotoSansSC-Regular.otf`](https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf)，
@@ -32,10 +34,11 @@
 `faa6c9df652116dde789d351359f3d7e5d2285a2b2a1f04a2d7244df706d5ea9`。
 
 在仓库根目录执行 `bash tools/generate_marvy_fonts.sh` 可重新生成。
-脚本校验源字体摘要，固定使用 `lv_font_conv` **1.5.3**，以
-`--bpp 4 --format lvgl --no-compress --lv-include lvgl.h` 分别生成 16 和 20 px
-字库。生成的 C 文件加入应用 CMake 源码列表，界面标签须显式选择对应字体。
-修改字符清单后应重建两个尺寸并运行字符覆盖 gate。固定子集不支持任意输入；
+脚本校验源字体摘要，固定使用 `lv_font_conv` **1.5.3**，分别生成 16 和 20 px
+的两种风格：平滑欢迎页字库使用 `--bpp 4`，硬边游戏字库使用 `--bpp 1`；两者
+都采用 `--format lvgl --no-compress --lv-include lvgl.h`。生成的 C 文件加入应用
+CMake 源码列表，界面标签显式选择对应字体。修改字符清单后应重建四份字库并
+运行字符覆盖 gate。固定子集不支持任意输入；
 真机字形与排版检查仍是独立验收项。
 
 ## 图片（images）
@@ -76,34 +79,44 @@
 - 嵌入音频前评估 Flash 与内部 RAM 成本；长录音应流式或分块。
 - 无再分发许可不提交媒体文件。
 
-### Marvy 背景音乐
+### Marvy 配乐与采样命中音效
 
-游戏使用 **ADnova** 的 [beepbox #11](https://freesound.org/s/381316/)，按
-[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) 使用。它是一段轻松、
-欢快的芯片音乐循环，通过 sound 技能的 Freesound 搜索为离线套圈游戏挑选。
-获取记录、许可、文件摘要和转换设置保存在
-[`music/marvy_bgm.source.json`](music/marvy_bgm.source.json)。
+通过 sound 技能的 Freesound 搜索挑选三段素材，均按
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) 使用，可用于本商业礼品
+应用。权威元数据保留各自的来源页、作者、获取时快照、原文件及 PCM SHA-256、
+转换方法：[`music/marvy_audio.source.json`](music/marvy_audio.source.json)。
 
-| 文件 | 格式与用途 |
-| --- | --- |
-| [`music/fs_381316_beepbox-11.mp3`](music/fs_381316_beepbox-11.mp3) | 从 Freesound 下载的高质量 MP3 预览，44.1 kHz 单声道；用于转换。 |
-| [`music/marvy_bgm.pcm`](music/marvy_bgm.pcm) | 16 kHz、16 位小端有符号单声道 PCM；203,407 个采样 / 406,814 字节 / 约 12.713 秒，嵌入固件。 |
-| [`music/marvy_bgm.source.json`](music/marvy_bgm.source.json) | 来源、CC0 许可、获取时元数据、SHA-256 和处理方法。 |
+| 用途与来源 | 转换源文件 | 内嵌 PCM |
+| --- | --- | --- |
+| 背景乐：**solarpsychedelic** 的 [adventure](https://freesound.org/s/749008/) | [`fs_749008_adventure.mp3`](music/fs_749008_adventure.mp3)，下载的高质量预览 | [`marvy_bgm.pcm`](music/marvy_bgm.pcm)：177,824 个采样 / 355,648 字节 / 11.114 秒，轻快芯片音乐循环。 |
+| 普通命中：**timgormly** 的 [8-bit coin1.1.wav](https://freesound.org/s/162805/) | [`fs_162805_8-bit-coin1-1-wav.mp3`](music/fs_162805_8-bit-coin1-1-wav.mp3)，下载的高质量预览 | [`marvy_hit.pcm`](music/marvy_hit.pcm)：5,917 个采样 / 11,834 字节 / 0.3698125 秒，硬币音效。 |
+| Marvy 命中：**SomeGuy22** 的 [8-Bit Powerup](https://freesound.org/s/431329/) | [`fs_431329_8-Bit-Powerup.mp3`](music/fs_431329_8-Bit-Powerup.mp3)，下载的高质量预览 | [`marvy_bonus.pcm`](music/marvy_bonus.pcm)：8,029 个采样 / 16,058 字节 / 0.5018125 秒，不同的升级音效。 |
 
-在仓库根目录使用 FFmpeg 转换：
+三份运行文件均为 16 kHz、16 位小端有符号单声道 PCM，合计 **383,540 字节**。
+每段解码音频在内嵌前独立归一化至峰值 **27,852**（16 位满幅的 85%）。
+MP3 预览只作为制备输入，不编译进固件。
+
+使用 [`music/prepare_audio.py`](music/prepare_audio.py) 重建：
 
 ```bash
-ffmpeg -hide_banner -loglevel error -y \
-  -i assets/music/fs_381316_beepbox-11.mp3 \
-  -ac 1 -ar 16000 -c:a pcm_s16le -f s16le assets/music/marvy_bgm.pcm
+python3 assets/music/prepare_audio.py
+# FFmpeg 不在 PATH 时：
+python3 assets/music/prepare_audio.py --ffmpeg /path/to/ffmpeg
 ```
 
-应用以 `marvy_bgm_pcm` 内嵌 PCM，并由音频任务使用一个 256 采样的缓冲区从
-Flash 分块播放。运行时将背景乐振幅缩小为原始 PCM 的 1/16，循环接缝使用
-4 ms 淡化，音乐开停使用 16 ms 渐变。原创合成反馈音效叠加在音乐之上；
-播放音效时，背景乐再降到 1/4。音频任务独占 codec，输出音量设为 32%。
-背景乐只在游戏进行中循环，在欢迎页、结算页和闲置暂停时停止。这些软件级别
-不等于真实扬声器的响度测量，最终听感仍需真机检查。
+脚本相对自身定位输入，校验固定的源文件摘要，通过 FFmpeg 解码并归一化 PCM，
+更新处理元数据和文件摘要。需要已安装 FFmpeg，或通过 `--ffmpeg` 指定；实际
+工具版本会写入元数据。设备端不执行归一化。
+
+应用内嵌 `marvy_bgm_pcm`、`marvy_hit_pcm` 和 `marvy_bonus_pcm`，由一个
+**256 采样**的音频任务缓冲区从 Flash 分块播放。运行时背景乐振幅为归一化 PCM
+的 1/4，采样命中音效为 1/3；循环接缝使用 4 ms 淡化，音乐开停和 ducking 使用
+16 ms 渐变。任意提示音播放时，背景乐再降到 1/4。最终采样限制在 **±16,384**，
+独占 codec 的音频任务将主音量设为 **65%**。其他短提示仍为原创合成反馈，不是
+正式的 Marvy 声音 logo。背景乐在欢迎页、结算页和闲置暂停时停止。
+
+这些软件设置提高了相较上一轮的数字输出，但不是实际扬声器响度测量。
+音乐音量、循环接缝、两种命中音的区分，以及保存分数时的播放效果仍需真机试听。
 
 ## 电池参数（battery）
 

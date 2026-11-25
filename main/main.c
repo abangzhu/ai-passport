@@ -24,9 +24,8 @@ static portMUX_TYPE s_input_lock = portMUX_INITIALIZER_UNLOCKED;
 static bool s_input_overflow;
 
 _Static_assert(BSP_BTN_COUNT == MARVY_INPUT_BUTTON_COUNT, "Input adapter matches board buttons");
-_Static_assert((int)BSP_BTN_UP == (int)MARVY_BUTTON_UP &&
-               (int)BSP_BTN_DOWN == (int)MARVY_BUTTON_DOWN &&
-               (int)BSP_BTN_OK == (int)MARVY_BUTTON_OK, "Input actions match board button order");
+_Static_assert((int)BSP_BTN_UP == 0 && (int)BSP_BTN_DOWN == 1 && (int)BSP_BTN_OK == 2,
+               "Board ADC slots match the application input translation");
 
 static bool take_input_overflow(void)
 {
@@ -45,11 +44,12 @@ static void on_key(bsp_btn_t button, bsp_btn_ev_t event, void *user)
     if (key_guard_consume(&s_key_guard, event == BSP_BTN_RELEASE, esp_timer_get_time())) return;
     if (!s_input_ready || s_input == NULL) return;
     if (event == BSP_BTN_PRESS || event == BSP_BTN_RELEASE) {
-        const marvy_input_event_t input = {
-            .button = (uint8_t)button,
-            .pressed = event == BSP_BTN_PRESS,
-            .at_ms = (uint64_t)(esp_timer_get_time() / 1000),
-        };
+        /* User-tested right-side order: #1=slot0, #2=slot1, #3=slot2.
+         * Translate both edges before queueing so hold/release ownership
+         * follows the numbered key throughout menu and gameplay contexts. */
+        marvy_input_event_t input;
+        if (!marvy_input_from_board((uint8_t)button, event == BSP_BTN_PRESS,
+                                    (uint64_t)(esp_timer_get_time() / 1000), &input)) return;
         if (xQueueSend(s_input, &input, 0) != pdTRUE) {
             portENTER_CRITICAL(&s_input_lock);
             s_input_overflow = true;
@@ -77,7 +77,7 @@ static void dispatch_events(uint32_t events, const marvy_game_t *game)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Marvy sheep ring: unified three-button controls 0.7.0-dev");
+    ESP_LOGI(TAG, "Marvy sheep ring: corrected numbered key mapping 0.8.1-dev");
     if (esp_sleep_get_wakeup_causes() & (1u << ESP_SLEEP_WAKEUP_GPIO)) {
         key_guard_arm(&s_key_guard, esp_timer_get_time(), 5000000);
     }

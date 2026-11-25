@@ -158,13 +158,6 @@ void marvy_game_intro_move(marvy_game_t *game, int direction)
                             ? MARVY_INTRO_CONTROLS : MARVY_INTRO_START;
 }
 
-void marvy_game_play_move(marvy_game_t *game, int direction)
-{
-    if (game->phase != MARVY_PHASE_PLAYING || direction == 0) return;
-    game->play_selection = game->play_selection == MARVY_PLAY_THROW
-                           ? MARVY_PLAY_PAUSE : MARVY_PLAY_THROW;
-}
-
 bool marvy_game_can_next(const marvy_game_t *game)
 {
     return game->phase == MARVY_PHASE_RESULTS && game->passed &&
@@ -217,10 +210,6 @@ uint32_t marvy_game_press(marvy_game_t *game)
         marvy_game_pause_confirm(game);
         return 0;
     }
-    if (game->phase == MARVY_PHASE_PLAYING && game->play_selection == MARVY_PLAY_PAUSE) {
-        marvy_game_pause(game);
-        return 0;
-    }
     if (game->phase != MARVY_PHASE_PLAYING || game->time_expired ||
         game->ring_state != MARVY_RING_READY) return 0;
     game->ring_state = MARVY_RING_CHARGING;
@@ -259,10 +248,7 @@ void marvy_game_pause_confirm(marvy_game_t *game)
 {
     if (game->phase != MARVY_PHASE_PAUSED) return;
     if (game->pause_selection == MARVY_PAUSE_EXIT) reset_round(game, MARVY_PHASE_INTRO);
-    else {
-        game->play_selection = MARVY_PLAY_THROW;
-        game->phase = MARVY_PHASE_PLAYING;
-    }
+    else game->phase = MARVY_PHASE_PLAYING;
 }
 
 float marvy_game_charge_target_x(uint32_t held_ms)

@@ -23,7 +23,7 @@ Store reusable font files and generated font sources in `fonts/`.
 | --- | --- |
 | [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | Unmodified Noto Sans SC Regular source for reproducible subset generation; not compiled into the firmware. |
 | [`fonts/OFL.txt`](fonts/OFL.txt) | Source font's SIL Open Font License 1.1 and copyright notice. Retain it with redistributed font assets. |
-| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted inventory of 126 fixed Chinese UI characters, including Controls help, unified button prompts, level, pause-menu, and result text. All four fonts also include 95 printable ASCII characters U+0020–U+007E, for 221 glyphs each. |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted inventory of 129 fixed Chinese UI characters, including numbered Controls help, menu/game button prompts, level, pause-menu, and result text. All four fonts also include 95 printable ASCII characters U+0020–U+007E, for 224 glyphs each. |
 | [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px, 4 bpp, uncompressed smooth LVGL bitmap font for welcome-screen text; exported symbol `marvy_font_16`. |
 | [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px, 4 bpp, uncompressed smooth LVGL bitmap font for welcome-screen headings; exported symbol `marvy_font_20`. |
 | [`fonts/marvy_pixel_16.c`](fonts/marvy_pixel_16.c) | 16 px, 1 bpp, uncompressed hard-edge LVGL bitmap font for Controls help, level briefs, gameplay HUD, menu hints, and controls; exported symbol `marvy_pixel_16`. |

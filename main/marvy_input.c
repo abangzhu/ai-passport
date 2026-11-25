@@ -1,5 +1,18 @@
 #include "marvy_input.h"
 
+bool marvy_input_from_board(uint8_t board_button, bool pressed, uint64_t at_ms,
+                            marvy_input_event_t *event)
+{
+    static const marvy_button_t actions[] = {
+        MARVY_KEY_1, MARVY_KEY_2, MARVY_KEY_3,
+    };
+    if (!event || board_button >= sizeof(actions) / sizeof(actions[0])) return false;
+    event->button = (uint8_t)actions[board_button];
+    event->pressed = pressed;
+    event->at_ms = at_ms;
+    return true;
+}
+
 void marvy_input_init(marvy_input_t *input)
 {
     input->held_button = -1;

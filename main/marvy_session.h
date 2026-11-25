@@ -15,13 +15,19 @@ typedef enum {
     MARVY_BUTTON_COUNT,
 } marvy_button_t;
 
+/* Physical right-side keys from top to bottom. Keep logical menu identities
+ * stable; the board adapter translates ADC slots before session dispatch. */
+#define MARVY_KEY_1 MARVY_BUTTON_OK
+#define MARVY_KEY_2 MARVY_BUTTON_UP
+#define MARVY_KEY_3 MARVY_BUTTON_DOWN
+
 typedef struct {
     marvy_game_t game;
     uint64_t now_ms;
     uint64_t last_input_ms;
     bool dimmed;
     bool button_held;
-    bool release_throws; /* This gesture actually began an OK-key charge. */
+    bool release_throws; /* This #2/#3 gesture actually began a charge. */
 } marvy_session_t;
 
 /* A session owns its game and accepts monotonic, absolute millisecond times.
@@ -37,14 +43,14 @@ void marvy_session_init(marvy_session_t *session, uint32_t seed, uint16_t best,
  * Game event bits are preserved alongside DIM/WAKE session event bits. */
 uint32_t marvy_session_advance(marvy_session_t *session, uint64_t target_ms);
 
-/* Convenience confirmation (OK) at the captured time. An event older
+/* Convenience #1 confirmation/return at the captured time. An event older
  * than the session clock is ignored. The first press after idle only wakes the
  * display and never skips the intro, throws a ring, or restarts the results. */
 uint32_t marvy_session_press(marvy_session_t *session, uint64_t pressed_at_ms);
 
-/* Board controls: UP/DOWN move focus only; OK confirms. During play the focused
- * THROW action charges on OK press and throws on its release; the PAUSE action
- * opens the pause menu. Controls-page arrows are inert. A press
+/* Menus: #1 confirms, #2 moves up and #3 moves down. During play #1 opens the
+ * pause menu immediately; #2/#3 both charge and throw on their matching release.
+ * Controls-page #2/#3 are inert. A press
  * whose time advance completes a stage is consumed before results navigation.
  * Every press still requires its matching release;
  * the first press after idle only wakes, including in the paused menu. */

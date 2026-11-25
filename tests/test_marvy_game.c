@@ -62,7 +62,7 @@ static void test_level_configuration_and_brief(void)
     assert(marvy_game_release(&g)==0);
 }
 
-static void test_unified_focus_and_confirm_actions(void)
+static void test_menu_confirmation_and_direct_pause_actions(void)
 {
     marvy_game_t g;
     marvy_game_init(&g, 123, 17);
@@ -82,30 +82,26 @@ static void test_unified_focus_and_confirm_actions(void)
     assert(g.intro_selection == MARVY_INTRO_START);
     assert(marvy_game_press(&g) == 0 && g.phase == MARVY_PHASE_BRIEF);
     assert(marvy_game_press(&g) == MARVY_EVENT_START);
-    assert(g.play_selection == MARVY_PLAY_THROW);
     clear_lane(&g);
     marvy_game_step(&g, 1234);
-    marvy_game_play_move(&g, -1);
-    assert(g.play_selection == MARVY_PLAY_PAUSE && g.phase == MARVY_PHASE_PLAYING);
+    marvy_game_pause(&g);
+    assert(g.phase == MARVY_PHASE_PAUSED && g.ring_state == MARVY_RING_READY);
     assert(g.stage_elapsed_ms == 1234 && g.turn_ms == 1234 && g.throws == 0);
-    assert(marvy_game_press(&g) == 0 && g.phase == MARVY_PHASE_PAUSED);
     marvy_game_pause_move(&g, -1);
     assert(g.pause_selection == MARVY_PAUSE_EXIT);
     marvy_game_pause_move(&g, 1);
     assert(g.pause_selection == MARVY_PAUSE_CONTINUE);
     assert(marvy_game_press(&g) == 0 && g.phase == MARVY_PHASE_PLAYING);
-    assert(g.play_selection == MARVY_PLAY_THROW && g.turn_ms == 1234);
-    marvy_game_play_move(&g, 0);
-    assert(g.play_selection == MARVY_PLAY_THROW);
+    assert(g.turn_ms == 1234);
     assert(marvy_game_press(&g) == 0 && g.ring_state == MARVY_RING_CHARGING);
     assert(marvy_game_release(&g) == MARVY_EVENT_THROW);
-    marvy_game_play_move(&g, 1);
-    assert(marvy_game_press(&g) == 0 && g.phase == MARVY_PHASE_PAUSED);
-    assert(g.ring_state == MARVY_RING_FLYING);
+    marvy_game_pause(&g);
+    assert(g.phase == MARVY_PHASE_PAUSED && g.ring_state == MARVY_RING_FLYING);
     marvy_game_pause_move(&g, 1); marvy_game_pause_confirm(&g);
     assert(g.phase == MARVY_PHASE_INTRO && g.intro_selection == MARVY_INTRO_START);
-    marvy_game_play_move(&g, 1); marvy_game_pause_move(&g, 1);
-    assert(g.phase == MARVY_PHASE_INTRO && g.play_selection == MARVY_PLAY_THROW);
+    marvy_game_pause_move(&g, 1);
+    assert(g.phase == MARVY_PHASE_INTRO);
+
 }
 
 static void test_first_three_levels_have_no_throw_deadline(void)
@@ -338,7 +334,7 @@ static void test_initial_brand_guarantee_and_closest_visible_hit(void)
 int main(void)
 {
     test_level_configuration_and_brief();
-    test_unified_focus_and_confirm_actions();
+    test_menu_confirmation_and_direct_pause_actions();
     test_first_three_levels_have_no_throw_deadline();
     test_throw_deadlines_and_cancel_do_not_extend_turn();
     test_unlimited_throws_uniform_lock_and_independent_celebration();

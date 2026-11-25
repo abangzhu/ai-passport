@@ -57,7 +57,7 @@ uint32_t marvy_session_advance(marvy_session_t *session, uint64_t target_ms)
 
 uint32_t marvy_session_press(marvy_session_t *session, uint64_t pressed_at_ms)
 {
-    return marvy_session_press_button(session, MARVY_BUTTON_OK, pressed_at_ms);
+    return marvy_session_press_button(session, MARVY_KEY_1, pressed_at_ms);
 }
 
 uint32_t marvy_session_press_button(marvy_session_t *session, marvy_button_t button,
@@ -78,28 +78,33 @@ uint32_t marvy_session_press_button(marvy_session_t *session, marvy_button_t but
     /* An input captured at the finishing boundary belongs to the old stage.
      * Consume its full gesture before accepting results-menu navigation. */
     if (events & MARVY_EVENT_FINISH) return events;
-    if (button != MARVY_BUTTON_OK) {
-        int direction = button == MARVY_BUTTON_UP ? -1 : 1;
+    if (session->game.phase == MARVY_PHASE_PLAYING) {
+        if (button == MARVY_KEY_1) {
+            marvy_game_pause(&session->game);
+            return events;
+        }
+        bool can_charge = session->game.ring_state == MARVY_RING_READY &&
+                          !session->game.time_expired;
+        events |= marvy_game_press(&session->game);
+        session->release_throws = can_charge && session->game.phase == MARVY_PHASE_PLAYING &&
+                                  session->game.ring_state == MARVY_RING_CHARGING;
+        return events;
+    }
+    if (button != MARVY_KEY_1) {
+        int direction = button == MARVY_KEY_2 ? -1 : 1;
         switch (session->game.phase) {
         case MARVY_PHASE_INTRO: marvy_game_intro_move(&session->game, direction); break;
         case MARVY_PHASE_BRIEF: marvy_game_brief_move(&session->game, direction); break;
-        case MARVY_PHASE_PLAYING: marvy_game_play_move(&session->game, direction); break;
         case MARVY_PHASE_PAUSED: marvy_game_pause_move(&session->game, direction); break;
         case MARVY_PHASE_RESULTS: marvy_game_result_move(&session->game, direction); break;
         case MARVY_PHASE_CONTROLS: break;
+        case MARVY_PHASE_PLAYING: break;
         }
         return events;
     }
-    bool can_charge = session->game.phase == MARVY_PHASE_PLAYING &&
-                      session->game.play_selection == MARVY_PLAY_THROW &&
-                      session->game.ring_state == MARVY_RING_READY &&
-                      !session->game.time_expired;
     events |= marvy_game_press(&session->game);
-    session->release_throws = can_charge && session->game.phase == MARVY_PHASE_PLAYING &&
-                              session->game.ring_state == MARVY_RING_CHARGING;
     return events;
 }
-
 
 uint32_t marvy_session_release(marvy_session_t *session, uint64_t released_at_ms)
 {

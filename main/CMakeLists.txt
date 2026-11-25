@@ -21,3 +21,11 @@ target_add_binary_data(${COMPONENT_LIB} "../assets/music/marvy_hit.pcm"
                       BINARY RENAME_TO marvy_hit_pcm)
 target_add_binary_data(${COMPONENT_LIB} "../assets/music/marvy_bonus.pcm"
                       BINARY RENAME_TO marvy_bonus_pcm)
+target_add_binary_data(${COMPONENT_LIB} "../assets/music/marvy_clear.pcm"
+                      BINARY RENAME_TO marvy_clear_pcm)
+target_add_binary_data(${COMPONENT_LIB} "../assets/music/marvy_fail.pcm"
+                      BINARY RENAME_TO marvy_fail_pcm)
+target_add_binary_data(${COMPONENT_LIB} "../assets/music/marvy_combo3.pcm"
+                      BINARY RENAME_TO marvy_combo3_pcm)
+target_add_binary_data(${COMPONENT_LIB} "../assets/music/marvy_combo5.pcm"
+                      BINARY RENAME_TO marvy_combo5_pcm)

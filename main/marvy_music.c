@@ -27,12 +27,18 @@ void marvy_music_set_hit_samples(marvy_music_t *mixer,
                                  const uint8_t *ordinary, size_t ordinary_bytes,
                                  const uint8_t *marvy, size_t marvy_bytes)
 {
-    mixer->ordinary_hit_pcm = ordinary;
-    mixer->ordinary_hit_bytes = ordinary ? ordinary_bytes - ordinary_bytes % 2 : 0;
-    mixer->marvy_hit_pcm = marvy;
-    mixer->marvy_hit_bytes = marvy ? marvy_bytes - marvy_bytes % 2 : 0;
+    marvy_music_set_sample(mixer, MARVY_SOUND_HIT, ordinary, ordinary_bytes);
+    marvy_music_set_sample(mixer, MARVY_SOUND_MARVY_HIT, marvy, marvy_bytes);
     mixer->cue_pcm = NULL;
     mixer->cue_pcm_bytes = mixer->cue_pcm_offset = 0;
+}
+
+void marvy_music_set_sample(marvy_music_t *mixer, marvy_sound_t sound,
+                            const uint8_t *pcm, size_t bytes)
+{
+    if (sound < MARVY_SOUND_INTRO || sound >= MARVY_SOUND_COUNT) return;
+    mixer->cue_sources[sound] = pcm;
+    mixer->cue_source_bytes[sound] = pcm ? bytes - bytes % 2 : 0;
 }
 
 static bool cue_active(const marvy_music_t *mixer)
@@ -49,10 +55,9 @@ void marvy_music_set_enabled(marvy_music_t *mixer, bool enabled)
 
 void marvy_music_cue(marvy_music_t *mixer, marvy_sound_t sound)
 {
-    const uint8_t *pcm = sound == MARVY_SOUND_HIT ? mixer->ordinary_hit_pcm
-                        : sound == MARVY_SOUND_MARVY_HIT ? mixer->marvy_hit_pcm : NULL;
-    size_t bytes = sound == MARVY_SOUND_HIT ? mixer->ordinary_hit_bytes
-                     : sound == MARVY_SOUND_MARVY_HIT ? mixer->marvy_hit_bytes : 0;
+    if (sound < MARVY_SOUND_INTRO || sound >= MARVY_SOUND_COUNT) return;
+    const uint8_t *pcm = mixer->cue_sources[sound];
+    size_t bytes = mixer->cue_source_bytes[sound];
     if (pcm && bytes > 0) {
         mixer->cue_pcm = pcm;
         mixer->cue_pcm_bytes = bytes;
@@ -68,6 +73,10 @@ void marvy_music_cue(marvy_music_t *mixer, marvy_sound_t sound)
     static const note_t marvy_hit[] = {{784, 60}, {988, 60}, {1175, 60}, {1568, 120}};
     static const note_t miss[] = {{330, 65}, {262, 80}};
     static const note_t finish[] = {{659, 70}, {784, 70}, {1047, 120}};
+    static const note_t level_clear[] = {{523, 80}, {659, 80}, {784, 80}, {1047, 220}};
+    static const note_t level_fail[] = {{392, 80}, {330, 80}, {262, 180}};
+    static const note_t combo_3[] = {{988, 55}, {1319, 95}};
+    static const note_t combo_5[] = {{988, 45}, {1319, 45}, {1568, 120}};
     const note_t *notes;
     size_t count;
 #define SELECT_NOTES(array) do { notes = (array); count = sizeof(array) / sizeof((array)[0]); } while (0)
@@ -79,6 +88,10 @@ void marvy_music_cue(marvy_music_t *mixer, marvy_sound_t sound)
     case MARVY_SOUND_MARVY_HIT: SELECT_NOTES(marvy_hit); break;
     case MARVY_SOUND_MISS: SELECT_NOTES(miss); break;
     case MARVY_SOUND_FINISH: SELECT_NOTES(finish); break;
+    case MARVY_SOUND_LEVEL_CLEAR: SELECT_NOTES(level_clear); break;
+    case MARVY_SOUND_LEVEL_FAIL: SELECT_NOTES(level_fail); break;
+    case MARVY_SOUND_COMBO_3: SELECT_NOTES(combo_3); break;
+    case MARVY_SOUND_COMBO_5: SELECT_NOTES(combo_5); break;
     default: return;
     }
 #undef SELECT_NOTES

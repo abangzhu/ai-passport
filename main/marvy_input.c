@@ -26,7 +26,7 @@ uint32_t marvy_input_handle(marvy_input_t *input, marvy_session_t *session,
     if (event->pressed) {
         if (input->held_button >= 0) return 0;
         input->held_button = (int8_t)event->button;
-        return marvy_session_press(session, event->at_ms);
+        return marvy_session_press_button(session, (marvy_button_t)event->button, event->at_ms);
     }
     if (input->held_button != event->button) return 0;
     input->held_button = -1;

@@ -23,11 +23,11 @@ Store reusable font files and generated font sources in `fonts/`.
 | --- | --- |
 | [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | Unmodified Noto Sans SC Regular source for reproducible subset generation; not compiled into the firmware. |
 | [`fonts/OFL.txt`](fonts/OFL.txt) | Source font's SIL Open Font License 1.1 and copyright notice. Retain it with redistributed font assets. |
-| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted inventory of 53 fixed Chinese UI characters. All four fonts also include 95 printable ASCII characters U+0020–U+007E: 148 glyphs per font. |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted inventory of 117 fixed Chinese UI characters, including level, pause-menu, and result text. All four fonts also include 95 printable ASCII characters U+0020–U+007E, for 212 glyphs each. |
 | [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px, 4 bpp, uncompressed smooth LVGL bitmap font for welcome-screen text; exported symbol `marvy_font_16`. |
 | [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px, 4 bpp, uncompressed smooth LVGL bitmap font for welcome-screen headings; exported symbol `marvy_font_20`. |
-| [`fonts/marvy_pixel_16.c`](fonts/marvy_pixel_16.c) | 16 px, 1 bpp, uncompressed hard-edge LVGL bitmap font for gameplay HUD and hints; exported symbol `marvy_pixel_16`. |
-| [`fonts/marvy_pixel_20.c`](fonts/marvy_pixel_20.c) | 20 px, 1 bpp, uncompressed hard-edge LVGL bitmap font for gameplay and result headings and celebration text; exported symbol `marvy_pixel_20`. |
+| [`fonts/marvy_pixel_16.c`](fonts/marvy_pixel_16.c) | 16 px, 1 bpp, uncompressed hard-edge LVGL bitmap font for level briefs, gameplay HUD, menu hints, and controls; exported symbol `marvy_pixel_16`. |
+| [`fonts/marvy_pixel_20.c`](fonts/marvy_pixel_20.c) | 20 px, 1 bpp, uncompressed hard-edge LVGL bitmap font for level, pause-menu, and result headings and celebration text; exported symbol `marvy_pixel_20`. |
 
 Source: [Noto CJK official repository](https://github.com/notofonts/noto-cjk),
 [`Sans/SubsetOTF/SC/NotoSansSC-Regular.otf`](https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf),
@@ -57,7 +57,7 @@ Store reusable source images and generated display assets in `images/`.
 | [`images/logo-wordmark-dark.png`](images/logo-wordmark-dark.png) | 1648 × 336, PNG RGBA | White version of the extracted wordmark for dark backgrounds in upstream hardware documentation. |
 | [`images/marvy-logo.png`](images/marvy-logo.png) | 600 × 600, PNG RGBA | Unmodified Marvy logo supplied by the user on 2026-11-24 for this product. Transparent background and pink/blue gradient retained. |
 | [`images/marvy-logo-welcome.png`](images/marvy-logo-welcome.png) | 112 × 112, PNG RGBA | Welcome-screen preview generated from the supplied logo. |
-| [`images/marvy-logo-badge.png`](images/marvy-logo-badge.png) | 20 × 20, PNG RGBA | Badge preview used to identify moving, caught, and result-page Marvy sheep. |
+| [`images/marvy-logo-badge.png`](images/marvy-logo-badge.png) | 20 × 20, PNG RGBA | Badge preview used to identify Marvy sheep in the application. |
 
 The supplied Marvy logo is brand material for this product, not a public-domain
 or open-source logo. Its source SHA-256 is
@@ -85,24 +85,38 @@ Store reusable music and sound-effect sources in `music/`.
 - Check Flash and internal-RAM cost before embedding audio; stream or chunk long recordings.
 - Do not commit media without redistribution permission.
 
-### Marvy music and sampled hit effects
+### Marvy music and sampled effects
 
-Three clips selected through the sound skill's Freesound search are used under
+Seven clips selected through the sound skill's Freesound search are used under
 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), which permits use
-in this commercial gift application. The checked-in metadata retains each
-source page, author, retrieval snapshot, source and PCM SHA-256 values, and
-conversion recipe: [`music/marvy_audio.source.json`](music/marvy_audio.source.json).
+in this commercial gift application. The metadata retains source pages,
+authors, retrieval-time download/rating snapshots, source and PCM SHA-256
+values, and the conversion recipe:
+[`music/marvy_audio.source.json`](music/marvy_audio.source.json).
 
 | Role and source | Conversion source | Embedded PCM |
 | --- | --- | --- |
 | BGM: [adventure](https://freesound.org/s/749008/) by **solarpsychedelic** | [`fs_749008_adventure.mp3`](music/fs_749008_adventure.mp3), downloaded high-quality preview | [`marvy_bgm.pcm`](music/marvy_bgm.pcm): 177,824 samples / 355,648 bytes / 11.114 seconds; cheerful chiptune loop. |
 | Ordinary catch: [8-bit coin1.1.wav](https://freesound.org/s/162805/) by **timgormly** | [`fs_162805_8-bit-coin1-1-wav.mp3`](music/fs_162805_8-bit-coin1-1-wav.mp3), downloaded high-quality preview | [`marvy_hit.pcm`](music/marvy_hit.pcm): 5,917 samples / 11,834 bytes / 0.3698125 seconds; coin effect. |
 | Marvy catch: [8-Bit Powerup](https://freesound.org/s/431329/) by **SomeGuy22** | [`fs_431329_8-Bit-Powerup.mp3`](music/fs_431329_8-Bit-Powerup.mp3), downloaded high-quality preview | [`marvy_bonus.pcm`](music/marvy_bonus.pcm): 8,029 samples / 16,058 bytes / 0.5018125 seconds; distinct power-up effect. |
+| Level clear: [Completed.wav](https://freesound.org/s/609336/) by **Kenneth_Cooney** | [`fs_609336_Completed-wav.mp3`](music/fs_609336_Completed-wav.mp3), downloaded high-quality preview | [`marvy_clear.pcm`](music/marvy_clear.pcm): 20,000 samples / 40,000 bytes / 1.25 seconds; completion cue. |
+| Level failure: [8-Bit - Error](https://freesound.org/s/450616/) by **Breviceps** | [`fs_450616_8-Bit-Error.mp3`](music/fs_450616_8-Bit-Error.mp3), downloaded high-quality preview | [`marvy_fail.pcm`](music/marvy_fail.pcm): 4,315 samples / 8,630 bytes / 0.2696875 seconds; short retry cue. |
+| Three consecutive catches: [8-bit Happy Ding](https://freesound.org/s/361264/) by **JapanYoshiTheGamer** | [`fs_361264_8-bit-Happy-Ding.mp3`](music/fs_361264_8-bit-Happy-Ding.mp3), downloaded high-quality preview | [`marvy_combo3.pcm`](music/marvy_combo3.pcm): 5,948 samples / 11,896 bytes / 0.37175 seconds; C-major bonus cue. |
+| Five consecutive catches: [LevelUp.wav](https://freesound.org/s/609335/) by **Kenneth_Cooney** | [`fs_609335_LevelUp-wav.mp3`](music/fs_609335_LevelUp-wav.mp3), downloaded high-quality preview | [`marvy_combo5.pcm`](music/marvy_combo5.pcm): 6,720 samples / 13,440 bytes / 0.42 seconds; successful-event cue. |
 
-All three runtime files are signed 16-bit little-endian PCM at 16 kHz mono,
-with a combined size of **383,540 bytes**. Each decoded source is independently
-peak-normalized to **27,852** (85% of 16-bit full scale) before embedding. The
-MP3 previews are preparation inputs and are not compiled into firmware.
+The original three runtime files remain unchanged at **383,540 bytes**. The four
+campaign effects add **73,966 bytes**, for **457,506 bytes** total. All runtime
+files are signed 16-bit little-endian PCM at 16 kHz mono. Each source is
+independently peak-normalized to **27,852** (85% of 16-bit full scale). MP3
+previews remain preparation inputs and are not compiled into firmware.
+
+The 2026-11-25 selection snapshot records 7,612 downloads and 4.8/5 from 127
+ratings for Completed; 7,463 and 4.7/5 from 66 for Error; 1,021 and 4.3/5 from
+16 for Happy Ding; and 3,689 and 4.9/5 from 68 for LevelUp. Selection followed
+uploader descriptions, popularity signals, and measured duration/energy,
+without a claim of listening. Completed is trimmed from 3.2 to 1.25 seconds;
+LevelUp from 0.621625 to 0.42 seconds. Both receive a 20 ms tail fade. Full
+source previews and the processing reasons remain in the metadata.
 
 Rebuild with [`music/prepare_audio.py`](music/prepare_audio.py):
 
@@ -113,23 +127,26 @@ python3 assets/music/prepare_audio.py --ffmpeg /path/to/ffmpeg
 ```
 
 The script resolves inputs relative to itself, verifies each pinned source
-checksum, decodes with FFmpeg, normalizes the PCM, and updates processing
-metadata and hashes. FFmpeg must be installed or supplied through `--ffmpeg`;
-its actual version is recorded. No normalization is performed on the device.
+checksum, decodes with FFmpeg, applies only metadata-declared trimming/fades,
+normalizes PCM, and updates processing metadata and hashes. FFmpeg must be
+installed or supplied through `--ffmpeg`; its actual version is recorded.
+No normalization is performed on the device.
 
-The application embeds `marvy_bgm_pcm`, `marvy_hit_pcm`, and `marvy_bonus_pcm`
-and streams from Flash through one **256-sample** worker buffer. Runtime BGM
-amplitude is 1/4 of normalized PCM; sampled hit amplitude is 1/3. Music loops
-with a 4 ms seam fade and uses 16 ms on/off and ducking ramps. While any cue
-plays, BGM is reduced to another 1/4. Final samples are bounded to **±16,384**,
-and the single codec-owning worker sets master volume to **65%**. Other short
-cues remain original synthesized feedback, not an official Marvy audio logo.
-BGM stops on welcome/results screens and idle pause.
+[`main/CMakeLists.txt`](../main/CMakeLists.txt) embeds all seven PCM files. The
+single codec-owning worker streams from Flash through one **256-sample** buffer.
+Runtime BGM amplitude is 1/4 of normalized PCM; sampled effects are 1/3. Music
+loops with a 4 ms seam fade and uses 16 ms on/off and ducking ramps. While any
+cue plays, BGM is reduced to another 1/4. Final samples are bounded to
+**±16,384**, with master volume **65%**. One cue plays at a time and a new request
+replaces it; level-result dispatch takes priority over combo/hit feedback,
+and the five-catch cue takes priority over the three-catch cue. Missing samples
+retain synthesized fallbacks. Other short cues remain original synthesis,
+not an official Marvy sound logo. BGM stops on welcome, level-brief, pause,
+and result screens, including idle dimming.
 
-These software settings increase the digital output from the previous
-iteration but do not establish physical speaker loudness. Music volume,
-loop seams, effect distinction, and simultaneous score-saving playback still
-require on-device listening.
+These software settings do not establish physical speaker loudness. Volume,
+loop seams, cue distinction and priority, pause/resume, and simultaneous
+progress-saving playback still require on-device listening.
 
 ## Battery profiles
 

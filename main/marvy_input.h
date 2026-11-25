@@ -2,7 +2,7 @@
 
 #include "marvy_session.h"
 
-enum { MARVY_INPUT_BUTTON_COUNT = 3 };
+enum { MARVY_INPUT_BUTTON_COUNT = MARVY_BUTTON_COUNT };
 
 typedef struct {
     uint8_t button;

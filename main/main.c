@@ -24,6 +24,9 @@ static portMUX_TYPE s_input_lock = portMUX_INITIALIZER_UNLOCKED;
 static bool s_input_overflow;
 
 _Static_assert(BSP_BTN_COUNT == MARVY_INPUT_BUTTON_COUNT, "Input adapter matches board buttons");
+_Static_assert((int)BSP_BTN_UP == (int)MARVY_BUTTON_UP &&
+               (int)BSP_BTN_DOWN == (int)MARVY_BUTTON_DOWN &&
+               (int)BSP_BTN_OK == (int)MARVY_BUTTON_OK, "Input actions match board button order");
 
 static bool take_input_overflow(void)
 {
@@ -57,8 +60,14 @@ static void on_key(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 
 static void dispatch_events(uint32_t events, const marvy_game_t *game)
 {
-    if (events & MARVY_EVENT_NEW_BEST) marvy_services_save_best(game->best_score);
-    if (events & MARVY_EVENT_MARVY_HIT) marvy_services_play(MARVY_SOUND_MARVY_HIT);
+    if (events & MARVY_EVENT_PROGRESS_CHANGED) marvy_services_save_progress(&game->progress);
+    /* A final landing can also be a hit and a streak milestone. The result cue
+     * must win, then streaks, then the ordinary moment-to-moment feedback. */
+    if (events & MARVY_EVENT_LEVEL_CLEAR) marvy_services_play(MARVY_SOUND_LEVEL_CLEAR);
+    else if (events & MARVY_EVENT_LEVEL_FAIL) marvy_services_play(MARVY_SOUND_LEVEL_FAIL);
+    else if (events & MARVY_EVENT_COMBO_5) marvy_services_play(MARVY_SOUND_COMBO_5);
+    else if (events & MARVY_EVENT_COMBO_3) marvy_services_play(MARVY_SOUND_COMBO_3);
+    else if (events & MARVY_EVENT_MARVY_HIT) marvy_services_play(MARVY_SOUND_MARVY_HIT);
     else if (events & MARVY_EVENT_HIT) marvy_services_play(MARVY_SOUND_HIT);
     else if (events & MARVY_EVENT_FINISH) marvy_services_play(MARVY_SOUND_FINISH);
     else if (events & MARVY_EVENT_THROW) marvy_services_play(MARVY_SOUND_THROW);
@@ -68,7 +77,7 @@ static void dispatch_events(uint32_t events, const marvy_game_t *game)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Marvy sheep ring: pixel charge iteration 0.3.0-dev");
+    ESP_LOGI(TAG, "Marvy sheep ring: six timed levels 0.6.0-dev");
     if (esp_sleep_get_wakeup_causes() & (1u << ESP_SLEEP_WAKEUP_GPIO)) {
         key_guard_arm(&s_key_guard, esp_timer_get_time(), 5000000);
     }
@@ -99,6 +108,9 @@ void app_main(void)
     marvy_input_init(&input);
     marvy_session_init(&session, esp_random(), marvy_services_best_score(),
                        (uint64_t)(esp_timer_get_time() / 1000));
+    marvy_progress_t progress;
+    marvy_services_get_progress(&progress);
+    marvy_game_apply_progress(&session.game, &progress);
     if (!bsp_lvgl_lock(1000)) {
         ESP_LOGE(TAG, "Cannot acquire display lock");
         return;
@@ -115,7 +127,6 @@ void app_main(void)
         /* Sample before draining. An event enqueued just after the empty check
          * then stays newer than this cutoff and remains valid next frame. */
         uint64_t now = (uint64_t)(esp_timer_get_time() / 1000);
-        uint32_t events = 0;
         marvy_input_event_t edge;
         if (take_input_overflow()) {
             (void)xQueueReset(s_input);
@@ -129,15 +140,17 @@ void app_main(void)
                 marvy_input_cancel(&input, &session);
                 break;
             }
-            events |= marvy_input_handle(&input, &session, &edge);
+            /* Dispatch while this event's result still belongs to the current
+             * stage, before a later queued press can enter another page. */
+            uint32_t events = marvy_input_handle(&input, &session, &edge);
+            dispatch_events(events, &session.game);
         }
-        events |= marvy_session_advance(&session, now);
+        dispatch_events(marvy_session_advance(&session, now), &session.game);
         if (session.dimmed) marvy_input_cancel(&input, &session);
         marvy_services_set_music(session.game.phase == MARVY_PHASE_PLAYING &&
                                  !session.dimmed);
-        dispatch_events(events, &session.game);
-        uint16_t stored_best = marvy_services_best_score();
-        if (stored_best > session.game.best_score) session.game.best_score = stored_best;
+        marvy_services_get_progress(&progress);
+        marvy_game_apply_progress(&session.game, &progress);
         if (now - last_battery >= 30000) {
             battery = battery_ready ? bsp_battery_soc() : -1;
             last_battery = now;

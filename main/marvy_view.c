@@ -43,7 +43,7 @@ typedef struct {
     lv_obj_t *parts[RING_PARTS];
 } ring_view_t;
 
-static lv_obj_t *s_screen, *s_intro, *s_brief, *s_play, *s_results;
+static lv_obj_t *s_screen, *s_intro, *s_controls, *s_brief, *s_play, *s_results;
 static lv_obj_t *s_header, *s_battery, *s_score, *s_timer, *s_level_heading;
 static lv_obj_t *s_hint, *s_legend, *s_progress, *s_combo, *s_timebar;
 static lv_obj_t *s_feedback, *s_feedback_points, *s_feedback_message;
@@ -55,6 +55,8 @@ static lv_obj_t *s_result_heading, *s_result_summary, *s_result_metrics;
 static lv_obj_t *s_result_rows[3], *s_result_labels[3], *s_result_digits[3][15];
 static lv_obj_t *s_countdown, *s_countdown_pixels[15];
 static lv_obj_t *s_welcome_logo, *s_welcome_prompt, *s_welcome_sparkles[WELCOME_SPARKLES];
+static lv_obj_t *s_intro_rows[2], *s_intro_labels[2];
+static lv_obj_t *s_play_actions, *s_play_rows[2];
 static lv_obj_t *s_pause, *s_pause_rows[2];
 static sheep_view_t s_sheep[MARVY_SHEEP_COUNT], s_caught;
 static ring_view_t s_ring, s_target;
@@ -343,7 +345,26 @@ void marvy_view_create(void)
     lv_obj_set_pos(s_welcome_logo, 64, 90);
     label(s_intro, "Marvy 祝你", 18, 215, 204, &marvy_font_20, INK);
     label(s_intro, "新年快乐", 18, 244, 204, &marvy_font_20, PURPLE);
-    s_welcome_prompt = label(s_intro, "按任意功能键选关", 12, 278, 216, &marvy_font_16, PURPLE);
+    static const char *const intro_choices[2] = {"开始游戏", "按键说明"};
+    for (unsigned i = 0; i < 2; ++i) {
+        s_intro_rows[i] = box(s_intro, 18 + (int)i * 108, 272, 96, 24, LILAC);
+        s_intro_labels[i] = label(s_intro, intro_choices[i], 20 + (int)i * 108,
+                                   274, 92, &marvy_font_16, PURPLE);
+    }
+    s_welcome_prompt = label(s_intro, "上下切换 右上确认", 12, 299, 216, &marvy_font_16, PURPLE);
+
+    s_controls = group(s_screen, 0, 0, 240, 320);
+    label(s_controls, "按键说明", 12, 55, 216, &marvy_pixel_20, WHITE);
+    box(s_controls, 18, 100, 98, 38, PURPLE);
+    label(s_controls, "上键 / 下键", 20, 109, 94, &marvy_pixel_16, WHITE);
+    label(s_controls, "切换选项", 122, 109, 100, &marvy_pixel_16, CYAN);
+    box(s_controls, 18, 150, 98, 38, PURPLE);
+    label(s_controls, "右上键", 20, 159, 94, &marvy_pixel_16, WHITE);
+    label(s_controls, "确认选择", 122, 159, 100, &marvy_pixel_16, CYAN);
+    label(s_controls, "游戏中上下切换投圈或暂停", 8, 212, 224, &marvy_pixel_16, WHITE);
+    label(s_controls, "选中投圈后\n右上按住蓄力 松手投出", 8, 239, 224, &marvy_pixel_16, WHITE);
+    box(s_controls, 36, 284, 168, 28, PURPLE);
+    label(s_controls, "右上确认返回", 38, 288, 164, &marvy_pixel_16, WHITE);
 
     s_brief = group(s_screen, 0, 0, 240, 320);
     s_brief_heading = label(s_brief, "第 1 关 / 6", 12, 55, 216, &marvy_pixel_16, CYAN);
@@ -353,9 +374,9 @@ void marvy_view_create(void)
     s_brief_best = label(s_brief, "最高 0 分", 12, 185, 216, &marvy_pixel_16, GOLD);
     stars_create(s_brief, s_brief_stars, 215);
     s_brief_rule = label(s_brief, "有落点提示 无出手限时", 8, 237, 224, &marvy_pixel_16, CYAN);
-    label(s_brief, "上下选择已解锁关卡", 10, 262, 220, &marvy_pixel_16, CYAN);
+    label(s_brief, "上下切换已解锁关卡", 10, 262, 220, &marvy_pixel_16, CYAN);
     box(s_brief, 36, 284, 168, 28, PURPLE);
-    label(s_brief, "确定开始", 38, 288, 164, &marvy_pixel_16, WHITE);
+    label(s_brief, "右上确认开始", 38, 288, 164, &marvy_pixel_16, WHITE);
 
     s_play = group(s_screen, 0, 0, 240, 320);
     s_level_heading = label(s_play, "第 1 关 初试身手", 8, 44, 224, &marvy_pixel_16, CYAN);
@@ -381,7 +402,13 @@ void marvy_view_create(void)
     box(s_play, 17, 269, 22, 3, GOLD);
     box(s_play, 20, 272, 16, 7, 0xA36A52);
     s_ring = ring_create(s_play, GOLD);
-    s_hint = label(s_play, "上下蓄力 松手投圈\n确定暂停", 8, 277, 224, &marvy_pixel_16, WHITE);
+    s_play_actions = group(s_play, 58, 274, 164, 24);
+    static const char *const play_choices[2] = {"投圈", "暂停"};
+    for (unsigned i = 0; i < 2; ++i) {
+        s_play_rows[i] = box(s_play_actions, (int)i * 84, 0, 78, 24, SKY_LIGHT);
+        label(s_play_actions, play_choices[i], 1 + (int)i * 84, 2, 76, &marvy_pixel_16, WHITE);
+    }
+    s_hint = label(s_play, "右上按住蓄力 松手投圈", 8, 300, 224, &marvy_pixel_16, WHITE);
     for (unsigned i = 0; i < FIREWORK_PARTICLES; ++i) {
         s_firework[i] = box(s_play, 0, 0, 3, 3, i % 2 ? PINK : GOLD);
         visible(s_firework[i], false);
@@ -408,10 +435,11 @@ void marvy_view_create(void)
     s_result_metrics = label(s_results, "投掷 0 次 命中 0%", 8, 198, 224, &marvy_pixel_16, CYAN);
     static const char *const choices[3] = {"下一关", "重新挑战", "返回欢迎页"};
     for (unsigned i = 0; i < 3; ++i) {
-        s_result_rows[i] = box(s_results, 34, 226 + (int)i * 28, 172, 26, SKY_LIGHT);
+        s_result_rows[i] = box(s_results, 34, 220 + (int)i * 26, 172, 23, SKY_LIGHT);
         s_result_labels[i] = label(s_results, choices[i], 36,
-                                   228 + (int)i * 28, 168, &marvy_pixel_16, WHITE);
+                                   222 + (int)i * 26, 168, &marvy_pixel_16, WHITE);
     }
+    label(s_results, "上下切换 右上确认", 8, 299, 224, &marvy_pixel_16, CYAN);
 
     s_pause = group(s_screen, 20, 100, 200, 168);
     box(s_pause, 4, 4, 200, 168, INK);
@@ -424,12 +452,13 @@ void marvy_view_create(void)
     }
     label(s_pause, "继续游戏", 14, 54, 172, &marvy_pixel_16, WHITE);
     label(s_pause, "返回欢迎页", 14, 97, 172, &marvy_pixel_16, WHITE);
-    label(s_pause, "上下选择 确定确认", 6, 140, 188, &marvy_pixel_16, CYAN);
+    label(s_pause, "上下切换 右上确认", 6, 140, 188, &marvy_pixel_16, CYAN);
     visible(s_pause, false);
 
     s_header = label(s_screen, "MARVY / 2027", 20, 17, 145, &marvy_font_16, PURPLE);
     s_battery = label(s_screen, "--%", 178, 17, 43, &marvy_font_16, INK);
     visible(s_brief, false);
+    visible(s_controls, false);
     visible(s_play, false);
     visible(s_results, false);
     lv_screen_load(s_screen);
@@ -511,13 +540,19 @@ static void render_play(const marvy_game_t *game, const marvy_level_config_t *co
         lv_obj_set_style_text_color(s_combo, lv_color_hex(game->combo_ms > 0 ? GOLD : CYAN), 0);
     }
     if (page_changed || s_previous_input != input_available ||
-        s_previous.ring_state != game->ring_state || s_previous.time_expired != game->time_expired) {
-        const char *hint = "上下蓄力 松手投圈\n确定暂停";
+        s_previous.ring_state != game->ring_state || s_previous.time_expired != game->time_expired ||
+        s_previous.play_selection != game->play_selection) {
+        const char *hint = "右上按住蓄力 松手投圈";
         if (!input_available) hint = "按键未就绪";
         else if (game->time_expired) hint = "时间到 等圈落地";
-        else if (game->ring_state == MARVY_RING_CHARGING) hint = "松手投圈\n确定暂停";
-        else if (game->ring_state == MARVY_RING_FLYING) hint = "圈在空中\n确定暂停";
+        else if (game->play_selection == MARVY_PLAY_PAUSE) hint = "右上确认暂停";
+        else if (game->ring_state == MARVY_RING_CHARGING) hint = "松手投圈";
+        else if (game->ring_state == MARVY_RING_FLYING) hint = "圈在空中";
+        else if (game->ring_state == MARVY_RING_FEEDBACK) hint = "等待下一圈";
         lv_label_set_text(s_hint, hint);
+    }
+    if (page_changed || s_previous.play_selection != game->play_selection) {
+        for (unsigned i = 0; i < 2; ++i) row_selected(s_play_rows[i], i == (unsigned)game->play_selection);
     }
     uint32_t held = game->ring_state == MARVY_RING_CHARGING ? game->ring_ms : 0;
     if (held > MARVY_CHARGE_MS) held = MARVY_CHARGE_MS;
@@ -615,10 +650,12 @@ void marvy_view_render(const marvy_game_t *game, int battery_percent,
                                (s_previous.phase == MARVY_PHASE_PLAYING ||
                                 s_previous.phase == MARVY_PHASE_PAUSED);
         visible(s_intro, intro);
+        visible(s_controls, game->phase == MARVY_PHASE_CONTROLS);
         visible(s_brief, game->phase == MARVY_PHASE_BRIEF);
         visible(s_play, gameplay);
         visible(s_pause, game->phase == MARVY_PHASE_PAUSED);
         visible(s_hint, game->phase != MARVY_PHASE_PAUSED);
+        visible(s_play_actions, game->phase != MARVY_PHASE_PAUSED);
         visible(s_results, game->phase == MARVY_PHASE_RESULTS);
         lv_obj_set_style_bg_color(s_screen, lv_color_hex(intro ? PAPER : SKY), 0);
         lv_obj_set_style_text_font(s_header, intro ? &marvy_font_16 : &marvy_pixel_16, 0);
@@ -631,7 +668,16 @@ void marvy_view_render(const marvy_game_t *game, int battery_percent,
             for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) s_sheep[i].was_visible = false;
         }
     }
-    if (game->phase == MARVY_PHASE_INTRO) welcome_update(game->phase_ms);
+    if (game->phase == MARVY_PHASE_INTRO) {
+        welcome_update(game->phase_ms);
+        if (page_changed || s_previous.intro_selection != game->intro_selection) {
+            for (unsigned i = 0; i < 2; ++i) {
+                bool selected = i == (unsigned)game->intro_selection;
+                lv_obj_set_style_bg_color(s_intro_rows[i], lv_color_hex(selected ? PURPLE : LILAC), 0);
+                lv_obj_set_style_text_color(s_intro_labels[i], lv_color_hex(selected ? WHITE : PURPLE), 0);
+            }
+        }
+    }
     else if (game->phase == MARVY_PHASE_BRIEF) render_brief(game, config);
     else if (game->phase == MARVY_PHASE_RESULTS) render_results(game, config);
     else if (gameplay) render_play(game, config, input_available, page_changed);

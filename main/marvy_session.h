@@ -21,6 +21,7 @@ typedef struct {
     uint64_t last_input_ms;
     bool dimmed;
     bool button_held;
+    bool release_throws; /* This gesture actually began an OK-key charge. */
 } marvy_session_t;
 
 /* A session owns its game and accepts monotonic, absolute millisecond times.
@@ -30,20 +31,20 @@ void marvy_session_init(marvy_session_t *session, uint32_t seed, uint16_t best,
 
 /* Run queued inputs in timestamp order before advancing to the frame end.
  * Playing stays awake until the fixed stage timer and final airborne ring settle.
- * Intro/brief/results/paused stop at their
+ * Intro/controls/brief/results/paused stop at their
  * 45-second idle deadline while wall time keeps moving; newly observed results
  * start a fresh idle interval at target_ms. Large frames use bounded core steps.
  * Game event bits are preserved alongside DIM/WAKE session event bits. */
 uint32_t marvy_session_advance(marvy_session_t *session, uint64_t target_ms);
 
-/* Advance to the captured event time before applying the action. An event older
+/* Convenience confirmation (OK) at the captured time. An event older
  * than the session clock is ignored. The first press after idle only wakes the
  * display and never skips the intro, throws a ring, or restarts the results. */
 uint32_t marvy_session_press(marvy_session_t *session, uint64_t pressed_at_ms);
 
-/* Board controls: UP/DOWN charge during play; OK opens the pause menu. In the
- * menu UP selects continue, DOWN selects exit, and OK confirms. Welcome accepts
- * any button; brief/results use UP/DOWN to select and OK to confirm. A press
+/* Board controls: UP/DOWN move focus only; OK confirms. During play the focused
+ * THROW action charges on OK press and throws on its release; the PAUSE action
+ * opens the pause menu. Controls-page arrows are inert. A press
  * whose time advance completes a stage is consumed before results navigation.
  * Every press still requires its matching release;
  * the first press after idle only wakes, including in the paused menu. */

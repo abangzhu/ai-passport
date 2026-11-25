@@ -29,8 +29,11 @@ typedef enum {
     MARVY_PHASE_RESULTS,
     MARVY_PHASE_PAUSED,
     MARVY_PHASE_BRIEF,
+    MARVY_PHASE_CONTROLS,
 } marvy_phase_t;
 
+typedef enum { MARVY_INTRO_START, MARVY_INTRO_CONTROLS } marvy_intro_selection_t;
+typedef enum { MARVY_PLAY_THROW, MARVY_PLAY_PAUSE } marvy_play_selection_t;
 typedef enum { MARVY_PAUSE_CONTINUE, MARVY_PAUSE_EXIT } marvy_pause_selection_t;
 typedef enum {
     MARVY_RESULT_NEXT,
@@ -80,6 +83,8 @@ typedef struct {
 
 typedef struct {
     marvy_phase_t phase;
+    marvy_intro_selection_t intro_selection;
+    marvy_play_selection_t play_selection;
     marvy_pause_selection_t pause_selection;
     marvy_result_selection_t result_selection;
     marvy_ring_state_t ring_state;
@@ -120,15 +125,19 @@ const marvy_level_config_t *marvy_game_level_config(unsigned level_index);
 uint32_t marvy_game_remaining_ms(const marvy_game_t *game);
 void marvy_game_init(marvy_game_t *game, uint32_t seed, uint16_t legacy_best);
 void marvy_game_apply_progress(marvy_game_t *game, const marvy_progress_t *progress);
-/* Intro goes to the untimed brief. Brief confirm starts; results confirm applies
- * the selected menu action. Only active READY presses start a charge. */
+/* Confirmation follows the focused action on every page. Intro selects the
+ * untimed brief or controls; controls returns to intro; brief starts a stage.
+ * During play, only confirming THROW while READY starts a charge. */
 uint32_t marvy_game_press(marvy_game_t *game);
+void marvy_game_intro_move(marvy_game_t *game, int direction);
+void marvy_game_play_move(marvy_game_t *game, int direction);
 void marvy_game_brief_move(marvy_game_t *game, int direction);
 bool marvy_game_can_next(const marvy_game_t *game);
 void marvy_game_result_move(marvy_game_t *game, int direction);
 uint32_t marvy_game_result_confirm(marvy_game_t *game);
 void marvy_game_pause(marvy_game_t *game);
 void marvy_game_pause_select(marvy_game_t *game, marvy_pause_selection_t selection);
+void marvy_game_pause_move(marvy_game_t *game, int direction);
 void marvy_game_pause_confirm(marvy_game_t *game);
 float marvy_game_charge_target_x(uint32_t held_ms);
 uint32_t marvy_game_release(marvy_game_t *game);

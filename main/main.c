@@ -77,7 +77,7 @@ static void dispatch_events(uint32_t events, const marvy_game_t *game)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Marvy sheep ring: six timed levels 0.6.0-dev");
+    ESP_LOGI(TAG, "Marvy sheep ring: unified three-button controls 0.7.0-dev");
     if (esp_sleep_get_wakeup_causes() & (1u << ESP_SLEEP_WAKEUP_GPIO)) {
         key_guard_arm(&s_key_guard, esp_timer_get_time(), 5000000);
     }

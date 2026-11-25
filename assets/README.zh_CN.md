@@ -21,11 +21,11 @@
 | --- | --- |
 | [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | 未修改的 Noto Sans SC Regular 源字体，用于可复现子集生成；不编译进固件。 |
 | [`fonts/OFL.txt`](fonts/OFL.txt) | 源字体的 SIL Open Font License 1.1 与版权声明；再分发字体资源时应保留。 |
-| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | 去重、排序后的 117 个固定中文界面字符清单，包含关卡、暂停菜单和结算文字。四份字库都包含 95 个可打印 ASCII 字符 U+0020–U+007E，每份共 212 个字形。 |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | 去重、排序后的 126 个固定中文界面字符清单，包含按键说明、统一操作提示、关卡、暂停菜单和结算文字。四份字库都包含 95 个可打印 ASCII 字符 U+0020–U+007E，每份共 221 个字形。 |
 | [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px、4 bpp、未压缩的平滑 LVGL 位图字库，用于欢迎页文字；导出符号 `marvy_font_16`。 |
 | [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px、4 bpp、未压缩的平滑 LVGL 位图字库，用于欢迎页标题；导出符号 `marvy_font_20`。 |
-| [`fonts/marvy_pixel_16.c`](fonts/marvy_pixel_16.c) | 16 px、1 bpp、未压缩的硬边 LVGL 位图字库，用于关卡说明、游戏 HUD、菜单提示与操作；导出符号 `marvy_pixel_16`。 |
-| [`fonts/marvy_pixel_20.c`](fonts/marvy_pixel_20.c) | 20 px、1 bpp、未压缩的硬边 LVGL 位图字库，用于关卡、暂停菜单与结算页标题、祝福文字；导出符号 `marvy_pixel_20`。 |
+| [`fonts/marvy_pixel_16.c`](fonts/marvy_pixel_16.c) | 16 px、1 bpp、未压缩的硬边 LVGL 位图字库，用于按键说明、关卡说明、游戏 HUD、菜单提示与操作；导出符号 `marvy_pixel_16`。 |
+| [`fonts/marvy_pixel_20.c`](fonts/marvy_pixel_20.c) | 20 px、1 bpp、未压缩的硬边 LVGL 位图字库，用于按键说明、关卡、暂停菜单与结算页标题、祝福文字；导出符号 `marvy_pixel_20`。 |
 
 来源：[Noto CJK 官方仓库](https://github.com/notofonts/noto-cjk)，
 [`Sans/SubsetOTF/SC/NotoSansSC-Regular.otf`](https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf)，

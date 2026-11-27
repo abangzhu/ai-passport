@@ -18,7 +18,13 @@ uint32_t marvy_session_advance(marvy_session_t *session, uint64_t target_ms)
     }
     uint32_t events = 0;
     if (!session->dimmed) {
-        if (session->game.phase == MARVY_PHASE_PLAYING) {
+        if (session->game.phase == MARVY_PHASE_DEMO) {
+            uint64_t remaining = target_ms - session->now_ms;
+            /* Discard whole presentation cycles before narrowing the delta.
+             * The looping demo stays awake until an explicit confirmation. */
+            uint32_t elapsed = (uint32_t)(remaining % MARVY_DEMO_MS);
+            events = marvy_game_step(&session->game, elapsed);
+        } else if (session->game.phase == MARVY_PHASE_PLAYING) {
             /* The finite stage and its final airborne ring must settle even
              * without input. Chunk before narrowing an absolute time delta. */
             uint64_t remaining = target_ms - session->now_ms;
@@ -99,6 +105,8 @@ uint32_t marvy_session_press_button(marvy_session_t *session, marvy_button_t but
         case MARVY_PHASE_RESULTS: marvy_game_result_move(&session->game, direction); break;
         case MARVY_PHASE_CONTROLS: break;
         case MARVY_PHASE_PLAYING: break;
+        case MARVY_PHASE_DEMO: break;
+        case MARVY_PHASE_FOLLOW: break;
         }
         return events;
     }

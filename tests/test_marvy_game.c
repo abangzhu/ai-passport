@@ -15,6 +15,7 @@ static void start(marvy_game_t *g, unsigned level)
     marvy_progress_t p;
     marvy_progress_init(&p); p.unlocked_count = (uint8_t)(level + 1);
     marvy_game_apply_progress(g, &p);
+    assert(marvy_game_press(g) == 0 && g->phase == MARVY_PHASE_DEMO);
     assert(marvy_game_press(g) == 0 && g->phase == MARVY_PHASE_BRIEF);
     g->level_index = (uint8_t)level;
     assert(marvy_game_press(g) == MARVY_EVENT_START);
@@ -54,6 +55,7 @@ static void test_level_configuration_and_brief(void)
     marvy_game_t g; marvy_game_init(&g,0,9);
     assert(g.phase==MARVY_PHASE_INTRO && g.progress.unlocked_count==1);
     marvy_game_step(&g,60000); assert(g.phase==MARVY_PHASE_INTRO);
+    assert(marvy_game_press(&g)==0 && g.phase==MARVY_PHASE_DEMO);
     assert(marvy_game_press(&g)==0 && g.phase==MARVY_PHASE_BRIEF);
     marvy_game_brief_move(&g,1); assert(g.level_index==0);
     marvy_game_step(&g,60000); assert(g.stage_elapsed_ms==0);
@@ -80,6 +82,7 @@ static void test_menu_confirmation_and_direct_pause_actions(void)
     assert(g.intro_selection == MARVY_INTRO_START);
     marvy_game_intro_move(&g, 1); marvy_game_intro_move(&g, 1);
     assert(g.intro_selection == MARVY_INTRO_START);
+    assert(marvy_game_press(&g) == 0 && g.phase == MARVY_PHASE_DEMO);
     assert(marvy_game_press(&g) == 0 && g.phase == MARVY_PHASE_BRIEF);
     assert(marvy_game_press(&g) == MARVY_EVENT_START);
     clear_lane(&g);
@@ -227,6 +230,10 @@ static void test_stars_progress_and_result_navigation(void)
     start(&g,0); finish_fixture(&g,8,13); assert(g.stars==3);
     start(&g,5); finish_fixture(&g,14,20); assert(g.stars==3 && !marvy_game_can_next(&g));
     assert(g.progress.unlocked_count==6 && g.progress.best_stars[5]==3);
+    assert(g.result_selection==MARVY_RESULT_FOLLOW);
+    marvy_game_result_confirm(&g); assert(g.phase==MARVY_PHASE_FOLLOW);
+    marvy_game_press(&g); assert(g.phase==MARVY_PHASE_RESULTS);
+    marvy_game_result_move(&g,1); assert(g.result_selection==MARVY_RESULT_RETRY);
     marvy_game_result_confirm(&g); assert(g.phase==MARVY_PHASE_BRIEF && g.level_index==5);
 }
 

@@ -21,6 +21,7 @@ enum {
     MARVY_MARVY_FEEDBACK_MS = 1200,
     MARVY_COMBO_MS = 900,
     MARVY_MAX_STEP_MS = 60000,
+    MARVY_DEMO_MS = 6000,
 };
 
 typedef enum {
@@ -30,6 +31,8 @@ typedef enum {
     MARVY_PHASE_PAUSED,
     MARVY_PHASE_BRIEF,
     MARVY_PHASE_CONTROLS,
+    MARVY_PHASE_DEMO,
+    MARVY_PHASE_FOLLOW,
 } marvy_phase_t;
 
 typedef enum { MARVY_INTRO_START, MARVY_INTRO_CONTROLS } marvy_intro_selection_t;
@@ -38,6 +41,7 @@ typedef enum {
     MARVY_RESULT_NEXT,
     MARVY_RESULT_RETRY,
     MARVY_RESULT_WELCOME,
+    MARVY_RESULT_FOLLOW,
 } marvy_result_selection_t;
 typedef enum {
     MARVY_RING_READY,
@@ -124,13 +128,15 @@ uint32_t marvy_game_remaining_ms(const marvy_game_t *game);
 void marvy_game_init(marvy_game_t *game, uint32_t seed, uint16_t legacy_best);
 void marvy_game_apply_progress(marvy_game_t *game, const marvy_progress_t *progress);
 /* Confirmation follows the focused action on menu pages. Intro selects the
- * untimed brief or controls; controls returns to intro; brief starts a stage.
+ * looping six-second demo or controls; demo confirmation enters an untimed brief;
+ * controls returns to intro; brief starts a stage. Follow returns to results.
  * During play this pure action starts a READY charge; the session routes the
  * numbered return key to pause instead. */
 uint32_t marvy_game_press(marvy_game_t *game);
 void marvy_game_intro_move(marvy_game_t *game, int direction);
 void marvy_game_brief_move(marvy_game_t *game, int direction);
 bool marvy_game_can_next(const marvy_game_t *game);
+bool marvy_game_can_follow(const marvy_game_t *game);
 void marvy_game_result_move(marvy_game_t *game, int direction);
 uint32_t marvy_game_result_confirm(marvy_game_t *game);
 void marvy_game_pause(marvy_game_t *game);
@@ -146,5 +152,6 @@ unsigned marvy_game_countdown(const marvy_game_t *game);
 /* Identical input lock for every landing; celebration has its own timer. */
 uint32_t marvy_game_feedback_ms(const marvy_game_t *game);
 /* At the stage boundary, no new throw is accepted. An already airborne ring
- * settles before results. Stage deadline wins over a simultaneous throw limit. */
+ * settles before results. Stage deadline wins over a simultaneous throw limit.
+ * Demo time loops independently until confirmation enters the untimed brief. */
 uint32_t marvy_game_step(marvy_game_t *game, uint32_t elapsed_ms);

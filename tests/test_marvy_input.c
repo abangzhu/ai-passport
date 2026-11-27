@@ -23,6 +23,7 @@ static void start(marvy_input_t *input, marvy_session_t *s, unsigned level)
     marvy_input_init(input); marvy_session_init(s, 123, 17, 0);
     marvy_progress_t progress; marvy_progress_init(&progress);
     progress.unlocked_count = (uint8_t)(level + 1); marvy_game_apply_progress(&s->game, &progress);
+    assert(click(input, s, MARVY_KEY_1, 0) == 0 && s->game.phase == MARVY_PHASE_DEMO);
     assert(click(input, s, MARVY_KEY_1, 0) == 0 && s->game.phase == MARVY_PHASE_BRIEF);
     s->game.level_index = (uint8_t)level;
     assert(click(input, s, MARVY_KEY_1, 0) == MARVY_EVENT_START);
@@ -53,6 +54,7 @@ static void board_start(marvy_input_t *input, marvy_session_t *s, unsigned level
     marvy_input_init(input); marvy_session_init(s, 123, 17, 0);
     marvy_progress_t progress; marvy_progress_init(&progress);
     progress.unlocked_count = (uint8_t)(level + 1); marvy_game_apply_progress(&s->game, &progress);
+    assert(board_click(input, s, PHYSICAL_KEY_1, 0) == 0 && s->game.phase == MARVY_PHASE_DEMO);
     assert(board_click(input, s, PHYSICAL_KEY_1, 0) == 0 && s->game.phase == MARVY_PHASE_BRIEF);
     s->game.level_index = (uint8_t)level;
     assert(board_click(input, s, PHYSICAL_KEY_1, 0) == MARVY_EVENT_START);
@@ -97,6 +99,7 @@ static void test_numbered_physical_menu_roles_and_start_release_are_safe(void)
     board_click(&input, &s, PHYSICAL_KEY_2, 30); board_click(&input, &s, PHYSICAL_KEY_3, 31);
     assert(s.game.phase == MARVY_PHASE_CONTROLS);
     board_click(&input, &s, PHYSICAL_KEY_1, 40); assert(s.game.phase == MARVY_PHASE_INTRO);
+    board_click(&input, &s, PHYSICAL_KEY_1, 50); assert(s.game.phase == MARVY_PHASE_DEMO);
     board_click(&input, &s, PHYSICAL_KEY_1, 50); assert(s.game.phase == MARVY_PHASE_BRIEF);
     board_click(&input, &s, PHYSICAL_KEY_3, 60); assert(s.game.level_index == 1);
     board_click(&input, &s, PHYSICAL_KEY_2, 70); assert(s.game.level_index == 0);

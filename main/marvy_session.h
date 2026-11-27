@@ -37,7 +37,8 @@ void marvy_session_init(marvy_session_t *session, uint32_t seed, uint16_t best,
 
 /* Run queued inputs in timestamp order before advancing to the frame end.
  * Playing stays awake until the fixed stage timer and final airborne ring settle.
- * Intro/controls/brief/results/paused stop at their
+ * Demo loops and stays awake until confirmation gives the brief a fresh idle interval.
+ * Intro/controls/brief/results/follow/paused stop at their
  * 45-second idle deadline while wall time keeps moving; newly observed results
  * start a fresh idle interval at target_ms. Large frames use bounded core steps.
  * Game event bits are preserved alongside DIM/WAKE session event bits. */
@@ -50,8 +51,9 @@ uint32_t marvy_session_press(marvy_session_t *session, uint64_t pressed_at_ms);
 
 /* Menus: #1 confirms, #2 moves up and #3 moves down. During play #1 opens the
  * pause menu immediately; #2/#3 both charge and throw on their matching release.
- * Controls-page #2/#3 are inert. A press
- * whose time advance completes a stage is consumed before results navigation.
+ * Controls/demo/follow #2/#3 are inert; #1 confirms demo or returns from follow.
+ * A press whose time advance completes a stage is consumed before navigation
+ * on the new page. Loop boundaries never confirm or skip pages automatically.
  * Every press still requires its matching release;
  * the first press after idle only wakes, including in the paused menu. */
 uint32_t marvy_session_press_button(marvy_session_t *session, marvy_button_t button,

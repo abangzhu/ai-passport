@@ -21,7 +21,7 @@
 | --- | --- |
 | [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | 未修改的 Noto Sans SC Regular 源字体，用于可复现子集生成；不编译进固件。 |
 | [`fonts/OFL.txt`](fonts/OFL.txt) | 源字体的 SIL Open Font License 1.1 与版权声明；再分发字体资源时应保留。 |
-| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | 去重、排序后的 129 个固定中文界面字符清单，包含编号按键说明、菜单／游戏操作提示、关卡、暂停菜单和结算文字。四份字库都包含 95 个可打印 ASCII 字符 U+0020–U+007E，每份共 224 个字形。 |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | 去重、排序后的 143 个固定中文界面字符清单，包含编号按键说明、菜单／游戏操作提示、关卡、暂停菜单、结算、开场演示与扫码页文字。四份字库都包含 95 个可打印 ASCII 字符 U+0020–U+007E，每份共 238 个字形。 |
 | [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px、4 bpp、未压缩的平滑 LVGL 位图字库，用于欢迎页文字；导出符号 `marvy_font_16`。 |
 | [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px、4 bpp、未压缩的平滑 LVGL 位图字库，用于欢迎页标题；导出符号 `marvy_font_20`。 |
 | [`fonts/marvy_pixel_16.c`](fonts/marvy_pixel_16.c) | 16 px、1 bpp、未压缩的硬边 LVGL 位图字库，用于按键说明、关卡说明、游戏 HUD、菜单提示与操作；导出符号 `marvy_pixel_16`。 |
@@ -54,6 +54,7 @@ CMake 源码列表，界面标签显式选择对应字体。修改字符清单�
 | [`images/marvy-logo.png`](images/marvy-logo.png) | 600 × 600，PNG RGBA | 用户于 2026-11-24 提供用于本产品的 Marvy Logo 原图，未修改；保留透明背景与粉蓝渐变。 |
 | [`images/marvy-logo-welcome.png`](images/marvy-logo-welcome.png) | 112 × 112，PNG RGBA | 从用户提供的 Logo 生成的欢迎页预览。 |
 | [`images/marvy-logo-badge.png`](images/marvy-logo-badge.png) | 20 × 20，PNG RGBA | 用于标记应用中 Marvy 羊的徽标预览。 |
+| [`images/marvy-follow-qr.jpg`](images/marvy-follow-qr.jpg) | 860 × 860，JPEG RGB | 用户于 2026-11-27 提供给通关页面使用的公开关注二维码附件，原样保存。 |
 
 用户提供的 Marvy Logo 是本产品的品牌素材，不是公共领域或开源 Logo。
 原图 SHA-256：
@@ -64,6 +65,30 @@ CMake 源码列表，界面标签显式选择对应字体。修改字符清单�
 生成文件而不写入。固件使用 LVGL RGB565A8 描述符：小端 RGB565 色彩平面后接
 独立 A8 平面。两份常驻 Flash 的像素数组共 38,832 字节，无需运行时 PNG 解码器
 或整图堆内存分配。
+
+### Marvy 关注二维码
+
+用户为本产品提供了关注二维码，这是未附独立再分发许可的品牌素材，不是
+公共领域资源。原图的 SHA-256 为：
+`89685d406c85ce42d8e043a76f81c582fb8fe5f47e35f901bae4dba6cf838fd2`。
+布局参考图仅在本地保留，不对外发布，也不作为生成、构建或测试的依赖。
+
+执行 `python3 tools/generate_marvy_qr.py` 可重建 `main/marvy_qr.h` 和
+`main/marvy_qr.c`，添加 `--check` 可只检查而不写入。转换器依赖 Pillow，
+采样附件已有的 37 × 37 模块网格，将每个可见模块精确绘制为 4 × 4 像素，
+并将四边白色留白扩展为至少四个模块；不重新生成或访问二维码内容。
+180 × 180 的底图使用 LVGL 原生小端 RGB565，每行 360 字节，占
+**64,800 字节 Flash**。原图中心彩色标记独立缩采样为 44 × 44 的 RGB565 图，
+占 **3,872 字节 Flash**，相对底图原点
+放在 `(68, 68)`。两份图都须按原生尺寸显示，不再缩放；只读像素数据合计
+**68,672 字节**，设备端无需 JPEG／PNG 解码器。选择原生 RGB565 是为了避免
+LVGL 软件解码器将 180 × 180 的索引图展开成 129,600 字节 ARGB8888 缓冲区；
+未压缩的 RGB565 变量图片路径直接引用 Flash 数据。添加
+`--preview /path/to/preview.png` 可生成与屏幕 RGB565 量化一致的合成预览。
+
+本机 CoreImage 解码已验证原图与 180 像素合成图携带完全相同的关注码内容，
+没有打开目标链接或上传图片。资源测试检查固定源文件、模块几何、白色留白、
+RGB565 字节序、标记颜色及生成描述符。实际屏幕的扫码效果仍需真机验收。
 
 - 使用描述性命名，并记录尺寸、像素格式、转换步骤与目标路径。
 - 优先采用适合 240 × 320 RGB565 显示的格式，并纳入 Flash 与内部 RAM 考量。

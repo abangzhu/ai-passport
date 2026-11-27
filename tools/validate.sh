@@ -91,6 +91,15 @@ run_static_checks() {
         -o "${test_dir}/test_marvy_game"
     "${test_dir}/test_marvy_game"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_marvy_completion.c main/marvy_completion.c \
+        -o "${test_dir}/test_marvy_completion"
+    "${test_dir}/test_marvy_completion"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_marvy_demo.c main/marvy_demo.c main/marvy_game.c \
+        main/marvy_session.c main/marvy_input.c \
+        -o "${test_dir}/test_marvy_demo"
+    "${test_dir}/test_marvy_demo"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_marvy_music.c main/marvy_music.c \
         -o "${test_dir}/test_marvy_music"
     "${test_dir}/test_marvy_music"
@@ -150,6 +159,7 @@ run_static_checks() {
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_check_repo.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_check_glyphs.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_marvy_logo.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_marvy_qr.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_archive_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_install_passport_skills.py

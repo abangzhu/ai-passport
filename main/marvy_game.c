@@ -1,4 +1,5 @@
 #include "marvy_game.h"
+#include "marvy_completion.h"
 
 #include <float.h>
 #include <limits.h>
@@ -164,13 +165,20 @@ bool marvy_game_can_next(const marvy_game_t *game)
            game->level_index + 1u < MARVY_LEVEL_COUNT;
 }
 
+bool marvy_game_can_follow(const marvy_game_t *game)
+{
+    return game->phase == MARVY_PHASE_RESULTS && game->passed &&
+           game->level_index + 1u == MARVY_LEVEL_COUNT;
+}
+
 void marvy_game_result_move(marvy_game_t *game, int direction)
 {
     if (game->phase != MARVY_PHASE_RESULTS || direction == 0) return;
     unsigned selection = game->result_selection;
     do {
-        selection = (selection + (direction > 0 ? 1 : 2)) % 3;
-    } while (selection == MARVY_RESULT_NEXT && !marvy_game_can_next(game));
+        selection = (selection + (direction > 0 ? 1 : 3)) % 4;
+    } while ((selection == MARVY_RESULT_NEXT && !marvy_game_can_next(game)) ||
+             (selection == MARVY_RESULT_FOLLOW && !marvy_game_can_follow(game)));
     game->result_selection = (marvy_result_selection_t)selection;
 }
 
@@ -184,6 +192,8 @@ uint32_t marvy_game_result_confirm(marvy_game_t *game)
     } else if (game->result_selection == MARVY_RESULT_NEXT && marvy_game_can_next(game)) {
         ++game->level_index;
         reset_round(game, MARVY_PHASE_BRIEF);
+    } else if (game->result_selection == MARVY_RESULT_FOLLOW && marvy_game_can_follow(game)) {
+        game->phase = MARVY_PHASE_FOLLOW;
     }
     return 0;
 }
@@ -194,11 +204,24 @@ uint32_t marvy_game_press(marvy_game_t *game)
         if (game->intro_selection == MARVY_INTRO_CONTROLS) {
             game->phase = MARVY_PHASE_CONTROLS;
             game->phase_ms = 0;
-        } else reset_round(game, MARVY_PHASE_BRIEF);
+        } else {
+            game->phase = MARVY_PHASE_DEMO;
+            game->phase_ms = 0;
+        }
         return 0;
     }
     if (game->phase == MARVY_PHASE_CONTROLS) {
         reset_round(game, MARVY_PHASE_INTRO);
+        return 0;
+    }
+    if (game->phase == MARVY_PHASE_DEMO) {
+        game->phase = MARVY_PHASE_BRIEF;
+        game->phase_ms = 0;
+        return 0;
+    }
+    if (game->phase == MARVY_PHASE_FOLLOW) {
+        game->phase = MARVY_PHASE_RESULTS;
+        game->phase_ms = MARVY_COMPLETION_FINALE_MS;
         return 0;
     }
     if (game->phase == MARVY_PHASE_BRIEF) {
@@ -387,7 +410,9 @@ static uint32_t finish_level(marvy_game_t *game)
     uint32_t events = MARVY_EVENT_FINISH |
                       (game->passed ? MARVY_EVENT_LEVEL_CLEAR : MARVY_EVENT_LEVEL_FAIL);
     if (marvy_progress_merge(&game->progress, &update)) events |= MARVY_EVENT_PROGRESS_CHANGED;
-    game->result_selection = marvy_game_can_next(game) ? MARVY_RESULT_NEXT : MARVY_RESULT_RETRY;
+    game->result_selection = marvy_game_can_next(game) ? MARVY_RESULT_NEXT
+                             : marvy_game_can_follow(game) ? MARVY_RESULT_FOLLOW
+                             : MARVY_RESULT_RETRY;
     return events;
 }
 
@@ -400,6 +425,13 @@ static void advance_visuals(marvy_game_t *game, uint32_t elapsed_ms)
 uint32_t marvy_game_step(marvy_game_t *game, uint32_t elapsed_ms)
 {
     if (game->phase == MARVY_PHASE_PAUSED) return 0;
+    if (game->phase == MARVY_PHASE_DEMO) {
+        /* Reduce each operand before addition, including malformed large ages.
+         * Demo has no simulation events or automatic navigation. */
+        game->phase_ms = (game->phase_ms % MARVY_DEMO_MS +
+                          elapsed_ms % MARVY_DEMO_MS) % MARVY_DEMO_MS;
+        return 0;
+    }
     uint32_t events = 0;
     if (elapsed_ms > MARVY_MAX_STEP_MS) elapsed_ms = MARVY_MAX_STEP_MS;
     while (elapsed_ms > 0) {

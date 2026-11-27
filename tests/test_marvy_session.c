@@ -20,6 +20,7 @@ static void start(marvy_session_t *s, unsigned level, uint64_t at)
     marvy_session_init(s, 123, 17, at);
     marvy_progress_t p; marvy_progress_init(&p); p.unlocked_count = (uint8_t)(level + 1);
     marvy_game_apply_progress(&s->game, &p);
+    assert(click(s, MARVY_BUTTON_OK, at) == 0 && s->game.phase == MARVY_PHASE_DEMO);
     assert(click(s, MARVY_BUTTON_OK, at) == 0 && s->game.phase == MARVY_PHASE_BRIEF);
     s->game.level_index = (uint8_t)level;
     assert(click(s, MARVY_BUTTON_OK, at) == MARVY_EVENT_START);
@@ -47,6 +48,8 @@ static void test_welcome_controls_and_brief_use_focus_then_confirm(void)
     assert(s.game.phase == MARVY_PHASE_INTRO && s.game.intro_selection == MARVY_INTRO_START);
     marvy_session_release(&s, 30000);
     assert(s.game.phase == MARVY_PHASE_INTRO && s.game.throws == 0);
+    click(&s, MARVY_BUTTON_OK, 30001);
+    assert(s.game.phase == MARVY_PHASE_DEMO);
     click(&s, MARVY_BUTTON_OK, 30001);
     assert(s.game.phase == MARVY_PHASE_BRIEF && s.game.stage_elapsed_ms == 0);
     marvy_progress_t p; marvy_progress_init(&p); p.unlocked_count = 6;
@@ -165,6 +168,8 @@ static void test_idle_wake_does_not_move_focus_or_confirm(void)
     assert(marvy_session_advance(&s, 95002) == MARVY_SESSION_EVENT_DIM);
     assert(marvy_session_press_button(&s, MARVY_BUTTON_UP, 95003) == MARVY_SESSION_EVENT_WAKE);
     marvy_session_release(&s, 95004); assert(s.game.intro_selection == MARVY_INTRO_START);
+    click(&s, MARVY_BUTTON_OK, 95005);
+    assert(s.game.phase == MARVY_PHASE_DEMO);
     click(&s, MARVY_BUTTON_OK, 95005);
     assert(marvy_session_advance(&s, 140005) == MARVY_SESSION_EVENT_DIM);
     assert(marvy_session_press_button(&s, MARVY_BUTTON_OK, 140006) == MARVY_SESSION_EVENT_WAKE);

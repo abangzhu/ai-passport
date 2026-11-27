@@ -23,7 +23,7 @@ Store reusable font files and generated font sources in `fonts/`.
 | --- | --- |
 | [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | Unmodified Noto Sans SC Regular source for reproducible subset generation; not compiled into the firmware. |
 | [`fonts/OFL.txt`](fonts/OFL.txt) | Source font's SIL Open Font License 1.1 and copyright notice. Retain it with redistributed font assets. |
-| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted inventory of 129 fixed Chinese UI characters, including numbered Controls help, menu/game button prompts, level, pause-menu, and result text. All four fonts also include 95 printable ASCII characters U+0020–U+007E, for 224 glyphs each. |
+| [`fonts/marvy_characters.txt`](fonts/marvy_characters.txt) | Deduplicated, sorted inventory of 143 fixed Chinese UI characters, including numbered Controls help, menu/game button prompts, levels, pause menus, results, the opening demonstration and follow-QR page. All four fonts also include 95 printable ASCII characters U+0020–U+007E, for 238 glyphs each. |
 | [`fonts/marvy_font_16.c`](fonts/marvy_font_16.c) | 16 px, 4 bpp, uncompressed smooth LVGL bitmap font for welcome-screen text; exported symbol `marvy_font_16`. |
 | [`fonts/marvy_font_20.c`](fonts/marvy_font_20.c) | 20 px, 4 bpp, uncompressed smooth LVGL bitmap font for welcome-screen headings; exported symbol `marvy_font_20`. |
 | [`fonts/marvy_pixel_16.c`](fonts/marvy_pixel_16.c) | 16 px, 1 bpp, uncompressed hard-edge LVGL bitmap font for Controls help, level briefs, gameplay HUD, menu hints, and controls; exported symbol `marvy_pixel_16`. |
@@ -58,6 +58,7 @@ Store reusable source images and generated display assets in `images/`.
 | [`images/marvy-logo.png`](images/marvy-logo.png) | 600 × 600, PNG RGBA | Unmodified Marvy logo supplied by the user on 2026-11-24 for this product. Transparent background and pink/blue gradient retained. |
 | [`images/marvy-logo-welcome.png`](images/marvy-logo-welcome.png) | 112 × 112, PNG RGBA | Welcome-screen preview generated from the supplied logo. |
 | [`images/marvy-logo-badge.png`](images/marvy-logo-badge.png) | 20 × 20, PNG RGBA | Badge preview used to identify Marvy sheep in the application. |
+| [`images/marvy-follow-qr.jpg`](images/marvy-follow-qr.jpg) | 860 × 860, JPEG RGB | Unmodified public follow-code attachment supplied by the user on 2026-11-27 for the completion page. |
 
 The supplied Marvy logo is brand material for this product, not a public-domain
 or open-source logo. Its source SHA-256 is
@@ -70,6 +71,36 @@ without modifying them. Firmware uses LVGL RGB565A8 descriptors: a
 little-endian RGB565 color plane followed by a separate A8 plane. The two
 Flash-resident pixel arrays total 38,832 bytes and need no runtime PNG decoder
 or full-image heap allocation.
+
+### Marvy follow QR
+
+The user supplied the follow-code for this product. It is brand material with
+no separate redistribution license, not a public-domain asset. Its SHA-256 is
+`89685d406c85ce42d8e043a76f81c582fb8fe5f47e35f901bae4dba6cf838fd2`.
+The layout reference remains local only and is excluded from publication. It
+is not a generation, build, or test dependency.
+
+Run `python3 tools/generate_marvy_qr.py` to reproduce `main/marvy_qr.h` and
+`main/marvy_qr.c`; `--check` verifies them without changes. The Pillow-based
+converter samples the attachment's existing 37 × 37 module grid, retaining
+each visible module at exactly 4 × 4 pixels and extending the white quiet zone
+to four modules on every side. It does not regenerate or open the QR payload.
+The 180 × 180 base uses native little-endian LVGL RGB565 with 360-byte rows:
+**64,800 Flash bytes**. The original central mark is resampled into a separate
+44 × 44 RGB565 image: **3,872 Flash bytes**, placed at base origin + `(68, 68)`.
+Both descriptors must be drawn at native size without scaling; the combined
+read-only pixel data is **68,672 bytes**. No JPEG/PNG decoder is used on the device.
+Native RGB565 is intentional: the LVGL software decoder otherwise expands an
+indexed 180 × 180 image into a 129,600-byte ARGB8888 buffer. The uncompressed
+RGB565 variable-image path references the Flash data directly.
+Use `--preview /path/to/preview.png` to reconstruct both images with the same
+RGB565 quantization used by the display.
+
+Local macOS CoreImage decoding verified that the source and the 180-pixel
+reconstruction carry exactly the same follow-code payload, without opening
+the destination or uploading either image. Resource tests check the pinned
+sources, module geometry, quiet zone, RGB565 byte order, mark color and
+generated descriptors. Physical-screen scanning remains an on-device check.
 
 - Use descriptive names and document dimensions, pixel format, conversion steps, and destination.
 - Prefer formats suitable for the 240 × 320 RGB565 display and account for Flash and internal RAM.

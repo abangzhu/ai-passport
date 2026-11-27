@@ -1,5 +1,8 @@
 #include "marvy_view.h"
+#include "marvy_completion.h"
+#include "marvy_demo.h"
 #include "marvy_logo.h"
+#include "marvy_qr.h"
 #include "lvgl.h"
 
 LV_FONT_DECLARE(marvy_font_16);
@@ -41,9 +44,13 @@ typedef struct {
 typedef struct {
     lv_obj_t *group;
     lv_obj_t *parts[RING_PARTS];
+    lv_obj_t *outline[RING_PARTS];
+    lv_obj_t *shine[2];
+    bool bold;
 } ring_view_t;
 
 static lv_obj_t *s_screen, *s_intro, *s_controls, *s_brief, *s_play, *s_results;
+static lv_obj_t *s_follow, *s_demo_heading, *s_demo_caption;
 static lv_obj_t *s_header, *s_battery, *s_score, *s_timer, *s_level_heading;
 static lv_obj_t *s_hint, *s_legend, *s_progress, *s_combo, *s_timebar;
 static lv_obj_t *s_feedback, *s_feedback_points, *s_feedback_message;
@@ -53,17 +60,25 @@ static lv_obj_t *s_brief_heading, *s_brief_name, *s_brief_goal, *s_brief_best, *
 static lv_obj_t *s_brief_stars[3][6], *s_result_stars[3][6];
 static lv_obj_t *s_result_heading, *s_result_summary, *s_result_metrics;
 static lv_obj_t *s_result_rows[3], *s_result_labels[3], *s_result_digits[3][15];
+static lv_obj_t *s_result_firework[MARVY_COMPLETION_PARTICLES], *s_result_trophy;
 static lv_obj_t *s_countdown, *s_countdown_pixels[15];
 static lv_obj_t *s_welcome_logo, *s_welcome_prompt, *s_welcome_sparkles[WELCOME_SPARKLES];
 static lv_obj_t *s_intro_rows[2], *s_intro_labels[2];
 static lv_obj_t *s_pause, *s_pause_rows[2];
-static sheep_view_t s_sheep[MARVY_SHEEP_COUNT], s_caught;
+static sheep_view_t s_sheep[MARVY_SHEEP_COUNT], s_caught, s_result_sheep;
 static ring_view_t s_ring, s_target;
 static marvy_game_t s_previous;
 static bool s_first_render;
 static int s_previous_battery = -2, s_previous_countdown = -1;
 static int s_previous_charge = -1, s_previous_feedback = -2;
 static bool s_previous_input;
+static bool s_completion_rendered, s_completion_was_active;
+static int s_previous_demo_step = -1;
+
+static const int s_star_parts[6][4] = {
+    {6, 0, 3, 3}, {0, 3, 15, 3}, {3, 6, 9, 3},
+    {0, 9, 15, 3}, {0, 12, 3, 3}, {12, 12, 3, 3},
+};
 
 static const char *const s_level_names[MARVY_LEVEL_COUNT] = {
     "初试身手", "凭手感套", "预判高手", "果断出手", "追赶 Marvy", "新年挑战",
@@ -194,11 +209,18 @@ static void landscape(lv_obj_t *parent)
     }
 }
 
-static ring_view_t ring_create(lv_obj_t *parent, uint32_t color)
+static ring_view_t ring_create(lv_obj_t *parent, uint32_t color, bool bold)
 {
     ring_view_t ring = {0};
     ring.group = group(parent, 0, 0, 44, 18);
+    ring.bold = bold;
+    if (bold) {
+        for (unsigned i = 0; i < RING_PARTS; ++i) ring.outline[i] = box(ring.group, 0, 0, 1, 1, INK);
+    }
     for (unsigned i = 0; i < RING_PARTS; ++i) ring.parts[i] = box(ring.group, 0, 0, 1, 1, color);
+    if (bold) {
+        for (unsigned i = 0; i < 2; ++i) ring.shine[i] = box(ring.group, 0, 0, 1, 1, WHITE);
+    }
     return ring;
 }
 
@@ -214,8 +236,23 @@ static void ring_position(ring_view_t *ring, int center_x, int center_y,
     for (unsigned i = 0; i < RING_PARTS; ++i) {
         int w = parts[i][2] * width / 44;
         int h = parts[i][3] * height / 18;
-        lv_obj_set_pos(ring->parts[i], parts[i][0] * width / 44, parts[i][1] * height / 18);
-        lv_obj_set_size(ring->parts[i], w < 1 ? 1 : w, h < 1 ? 1 : h);
+        int minimum = ring->bold ? 4 : 1;
+        if (w < minimum) w = minimum;
+        if (h < minimum) h = minimum;
+        int x = parts[i][0] * width / 44;
+        int y = parts[i][1] * height / 18;
+        if (ring->bold) {
+            lv_obj_set_pos(ring->outline[i], x - 2, y - 2);
+            lv_obj_set_size(ring->outline[i], w + 4, h + 4);
+        }
+        lv_obj_set_pos(ring->parts[i], x, y);
+        lv_obj_set_size(ring->parts[i], w, h);
+    }
+    if (ring->bold) {
+        lv_obj_set_pos(ring->shine[0], width * 12 / 44, 1);
+        lv_obj_set_size(ring->shine[0], width * 9 / 44, 2);
+        lv_obj_set_pos(ring->shine[1], width * 6 / 44, height * 4 / 18);
+        lv_obj_set_size(ring->shine[1], 3, 2);
     }
 }
 
@@ -267,14 +304,11 @@ static void fireworks_update(uint32_t remaining_ms)
 
 static void stars_create(lv_obj_t *parent, lv_obj_t *stars[3][6], int y)
 {
-    static const int parts[6][4] = {
-        {6, 0, 3, 3}, {0, 3, 15, 3}, {3, 6, 9, 3},
-        {0, 9, 15, 3}, {0, 12, 3, 3}, {12, 12, 3, 3},
-    };
     for (unsigned star = 0; star < 3; ++star) {
         for (unsigned part = 0; part < 6; ++part) {
-            stars[star][part] = box(parent, 85 + (int)star * 28 + parts[part][0],
-                                    y + parts[part][1], parts[part][2], parts[part][3], SKY_LIGHT);
+            stars[star][part] = box(parent, 85 + (int)star * 28 + s_star_parts[part][0],
+                                    y + s_star_parts[part][1], s_star_parts[part][2],
+                                    s_star_parts[part][3], SKY_LIGHT);
         }
     }
 }
@@ -294,6 +328,60 @@ static void row_selected(lv_obj_t *row, bool selected)
     lv_obj_set_style_bg_color(row, lv_color_hex(selected ? PURPLE : SKY_LIGHT), 0);
     lv_obj_set_style_border_width(row, selected ? 2 : 0, 0);
     lv_obj_set_style_border_color(row, lv_color_hex(LILAC), 0);
+}
+
+static lv_obj_t *trophy_create(lv_obj_t *parent)
+{
+    lv_obj_t *trophy = group(parent, 173, 112, 36, 44);
+    box(trophy, 2, 3, 8, 3, GOLD);
+    box(trophy, 2, 6, 3, 9, GOLD);
+    box(trophy, 2, 15, 10, 3, GOLD);
+    box(trophy, 25, 3, 8, 3, GOLD);
+    box(trophy, 30, 6, 3, 9, GOLD);
+    box(trophy, 23, 15, 10, 3, GOLD);
+    box(trophy, 7, 0, 21, 21, INK);
+    box(trophy, 9, 2, 17, 16, GOLD);
+    box(trophy, 11, 4, 5, 3, WHITE);
+    box(trophy, 12, 18, 11, 5, GOLD);
+    box(trophy, 16, 22, 3, 9, GOLD);
+    box(trophy, 10, 31, 15, 4, GOLD);
+    box(trophy, 7, 35, 21, 4, GOLD);
+    box(trophy, 16, 9, 4, 6, PURPLE);
+    return trophy;
+}
+
+/* Results remain an ordinary menu throughout the celebration. All decoration
+ * is preallocated, driven by phase_ms and hidden with its owning page. */
+static void completion_update(const marvy_game_t *game, bool page_changed)
+{
+    marvy_completion_frame_t frame;
+    marvy_completion_frame(game, &frame);
+    if (page_changed) s_completion_rendered = false;
+    if (s_completion_rendered && !frame.active && !s_completion_was_active) return;
+    stars_update(s_result_stars, frame.lit_stars);
+    for (unsigned star = 0; star < 3; ++star) {
+        for (unsigned part = 0; part < 6; ++part) {
+            lv_obj_set_y(s_result_stars[star][part],
+                          148 + s_star_parts[part][1] - frame.star_lift[star]);
+        }
+    }
+    lv_obj_set_y(s_result_heading, 58 - frame.heading_lift);
+    visible(s_result_sheep.group, frame.finale);
+    visible(s_result_trophy, frame.finale);
+    if (frame.finale) {
+        lv_obj_set_y(s_result_sheep.group, 112 - frame.sheep_lift);
+        lv_obj_set_y(s_result_trophy, 112 - frame.trophy_lift);
+        visible(s_result_sheep.sparkle, frame.active);
+    }
+    for (unsigned i = 0; i < MARVY_COMPLETION_PARTICLES; ++i) {
+        const marvy_completion_particle_t *particle = &frame.particles[i];
+        visible(s_result_firework[i], particle->visible);
+        if (!particle->visible) continue;
+        lv_obj_set_pos(s_result_firework[i], particle->x, particle->y);
+        lv_obj_set_style_bg_opa(s_result_firework[i], particle->opacity, 0);
+    }
+    s_completion_was_active = frame.active;
+    s_completion_rendered = true;
 }
 
 /* The existing render loop drives these objects, so hiding/dimming the page
@@ -324,6 +412,7 @@ static void welcome_update(uint32_t elapsed_ms)
 void marvy_view_create(void)
 {
     s_first_render = true;
+    s_completion_rendered = false;
     s_previous_battery = -2;
     s_previous_countdown = s_previous_charge = -1;
     s_previous_feedback = -2;
@@ -390,7 +479,7 @@ void marvy_view_create(void)
     box(s_play, 18, 102, 204, 4, SKY_LIGHT);
     s_timebar = box(s_play, 18, 102, 204, 4, CYAN);
     s_legend = label(s_play, "普通 +1 / Marvy +5", 12, 115, 216, &marvy_pixel_16, WHITE);
-    s_target = ring_create(s_play, CYAN);
+    s_target = ring_create(s_play, CYAN, false);
     lv_obj_set_style_opa(s_target.group, 170, 0);
     for (unsigned i = 0; i < MARVY_SHEEP_COUNT; ++i) {
         s_sheep[i] = sheep_create(s_play, 0, MARVY_SHEEP_BODY_Y - 24, false);
@@ -399,13 +488,13 @@ void marvy_view_create(void)
     visible(s_caught.group, false);
     s_progress = label(s_play, "套中 0 / 4", 8, 230, 137, &marvy_pixel_16, WHITE);
     s_combo = label(s_play, "已投 0", 146, 230, 86, &marvy_pixel_16, CYAN);
-    box(s_play, 29, 251, 182, 13, SKY_LIGHT);
+    box(s_play, 77, 251, 146, 13, SKY_LIGHT);
     for (unsigned i = 0; i < CHARGE_SEGMENTS; ++i) {
-        s_charge[i] = box(s_play, 32 + (int)i * 15, 254, 11, 7, DARK_GRASS);
+        s_charge[i] = box(s_play, 80 + (int)i * 12, 254, 8, 7, DARK_GRASS);
     }
-    box(s_play, 17, 269, 22, 3, GOLD);
-    box(s_play, 20, 272, 16, 7, 0xA36A52);
-    s_ring = ring_create(s_play, GOLD);
+    box(s_play, 29, 269, 22, 3, GOLD);
+    box(s_play, 32, 272, 16, 7, 0xA36A52);
+    s_ring = ring_create(s_play, GOLD, true);
     s_hint = label(s_play, "#2/#3按住蓄力\n松手投圈  #1暂停", 8, 278, 224, &marvy_pixel_16, WHITE);
     for (unsigned i = 0; i < FIREWORK_PARTICLES; ++i) {
         s_firework[i] = box(s_play, 0, 0, 3, 3, i % 2 ? PINK : GOLD);
@@ -423,6 +512,10 @@ void marvy_view_create(void)
             (int)(pixel % 3) * 8, (int)(pixel / 3) * 8, 7, 7, GOLD);
     }
     visible(s_countdown, false);
+    s_demo_heading = label(s_play, "玩法演示", 12, 55, 216, &marvy_pixel_20, GOLD);
+    s_demo_caption = label(s_play, "按住 #2 或 #3 蓄力", 8, 81, 224, &marvy_pixel_16, WHITE);
+    visible(s_demo_heading, false);
+    visible(s_demo_caption, false);
 
     s_results = group(s_screen, 0, 0, 240, 320);
     s_result_heading = label(s_results, "挑战完成", 12, 58, 216, &marvy_pixel_20, WHITE);
@@ -431,6 +524,15 @@ void marvy_view_create(void)
     stars_create(s_results, s_result_stars, 148);
     s_result_summary = label(s_results, "套中 0 / 4 只", 8, 174, 224, &marvy_pixel_16, WHITE);
     s_result_metrics = label(s_results, "投掷 0 次 命中 0%", 8, 198, 224, &marvy_pixel_16, CYAN);
+    for (unsigned i = 0; i < MARVY_COMPLETION_PARTICLES; ++i) {
+        static const uint32_t colors[] = {GOLD, PINK, CYAN};
+        s_result_firework[i] = box(s_results, 0, 0, 3, 3, colors[i % 3]);
+        visible(s_result_firework[i], false);
+    }
+    s_result_sheep = sheep_create(s_results, 17, 112, true);
+    s_result_trophy = trophy_create(s_results);
+    visible(s_result_sheep.group, false);
+    visible(s_result_trophy, false);
     static const char *const choices[3] = {"下一关", "重新挑战", "返回欢迎页"};
     for (unsigned i = 0; i < 3; ++i) {
         s_result_rows[i] = box(s_results, 34, 220 + (int)i * 26, 172, 23, SKY_LIGHT);
@@ -438,6 +540,19 @@ void marvy_view_create(void)
                                    222 + (int)i * 26, 168, &marvy_pixel_16, WHITE);
     }
     label(s_results, "#2上 #3下 #1确认", 8, 299, 224, &marvy_pixel_16, CYAN);
+
+    s_follow = group(s_screen, 0, 0, 240, 320);
+    lv_obj_t *qr = lv_image_create(s_follow);
+    lv_image_set_src(qr, &marvy_follow_qr);
+    lv_obj_set_pos(qr, 30, 55);
+    lv_obj_t *qr_mark = lv_image_create(s_follow);
+    lv_image_set_src(qr_mark, &marvy_follow_qr_mark);
+    lv_obj_set_pos(qr_mark, 30 + MARVY_QR_MARK_OFFSET, 55 + MARVY_QR_MARK_OFFSET);
+    label(s_follow, "扫码关注", 12, 239, 216, &marvy_pixel_20, 0x2E6CA6);
+    label(s_follow, "飞书深诺Meetsocial", 8, 267, 224, &marvy_pixel_16, INK);
+    box(s_follow, 38, 292, 164, 24, 0x2E6CA6);
+    label(s_follow, "#1 返回成绩", 40, 295, 160, &marvy_pixel_16, WHITE);
+    visible(s_follow, false);
 
     s_pause = group(s_screen, 20, 100, 200, 168);
     box(s_pause, 4, 4, 200, 168, INK);
@@ -492,23 +607,28 @@ static void render_results(const marvy_game_t *game, const marvy_level_config_t 
         lv_label_set_text(s_result_heading, heading);
         lv_obj_set_style_text_color(s_result_heading, lv_color_hex(game->passed ? GOLD : WHITE), 0);
         result_digits_update(game->score);
-        stars_update(s_result_stars, game->stars);
         lv_label_set_text_fmt(s_result_summary, "套中 %u / %u 只",
                                (unsigned)game->captures, (unsigned)config->target_catches);
         unsigned accuracy = game->throws ? (unsigned)game->captures * 100u / game->throws : 0;
         lv_label_set_text_fmt(s_result_metrics, "投掷 %u 次 命中 %u%%", (unsigned)game->throws, accuracy);
         bool next = marvy_game_can_next(game);
-        visible(s_result_rows[0], next);
-        visible(s_result_labels[0], next);
+        bool follow = marvy_game_can_follow(game);
+        lv_label_set_text(s_result_labels[0], follow ? "扫码关注" : "下一关");
+        visible(s_result_rows[0], next || follow);
+        visible(s_result_labels[0], next || follow);
     }
     if (changed || s_previous.result_selection != game->result_selection) {
-        for (unsigned i = 0; i < 3; ++i) row_selected(s_result_rows[i], i == (unsigned)game->result_selection);
+        unsigned selected = game->result_selection == MARVY_RESULT_FOLLOW
+                            ? 0 : (unsigned)game->result_selection;
+        for (unsigned i = 0; i < 3; ++i) row_selected(s_result_rows[i], i == selected);
     }
+    completion_update(game, changed);
 }
 
 static void render_play(const marvy_game_t *game, const marvy_level_config_t *config,
                          bool input_available, bool page_changed)
 {
+    bool demo = game->phase == MARVY_PHASE_DEMO;
     uint32_t remaining = marvy_game_remaining_ms(game);
     unsigned seconds = (remaining + 999) / 1000;
     if (page_changed || s_previous.level_index != game->level_index) {
@@ -521,6 +641,7 @@ static void render_play(const marvy_game_t *game, const marvy_level_config_t *co
         lv_obj_set_style_bg_color(s_timebar, lv_color_hex(seconds <= 5 ? PINK : CYAN), 0);
     }
     unsigned width = (unsigned)((uint64_t)remaining * 204 / config->duration_ms);
+    if (demo) width = (unsigned)((uint64_t)game->phase_ms * 204 / MARVY_DEMO_MS);
     visible(s_timebar, width > 0);
     lv_obj_set_width(s_timebar, width > 0 ? (int)width : 1);
     if (page_changed || s_previous.score != game->score) {
@@ -540,7 +661,8 @@ static void render_play(const marvy_game_t *game, const marvy_level_config_t *co
     if (page_changed || s_previous_input != input_available ||
         s_previous.ring_state != game->ring_state || s_previous.time_expired != game->time_expired) {
         const char *hint = "#2/#3按住蓄力\n松手投圈  #1暂停";
-        if (!input_available) hint = "按键未就绪";
+        if (demo) hint = "#1 确认开始";
+        else if (!input_available) hint = "按键未就绪";
         else if (game->time_expired) hint = "等待圈落地  #1暂停";
         else if (game->ring_state == MARVY_RING_CHARGING) hint = "松手投圈  #1暂停";
         else if (game->ring_state == MARVY_RING_FLYING) hint = "圈在空中  #1暂停";
@@ -615,30 +737,47 @@ static void render_play(const marvy_game_t *game, const marvy_level_config_t *co
     if (game->ring_state == MARVY_RING_FLYING) {
         float t = (float)game->ring_ms / MARVY_FLIGHT_MS;
         float arc = 4.0f * t * (1.0f - t);
-        int x = 28 + (int)((game->ring_target_x - 28) * t);
-        int y = 266 - (int)(72 * t + 57 * arc);
-        ring_position(&s_ring, x, y, 44 - (int)(8 * arc), 18 + (int)(10 * arc));
+        int x = 40 + (int)((game->ring_target_x - 40) * t);
+        int y = 264 - (int)(70 * t + 57 * arc);
+        ring_position(&s_ring, x, y, 60 - (int)(6 * arc), 24 + (int)(12 * arc));
     } else if (feedback) {
         int x = game->last_points ? (int)game->last_hit_x : (int)game->ring_target_x;
-        ring_position(&s_ring, x, MARVY_SHEEP_BODY_Y + 3, 44, 15);
-    } else ring_position(&s_ring, 28, 266, 36, 12);
+        /* A caught sheep can be a hit-radius beyond the target range. Keep
+         * the enlarged decoration on-screen without moving that sheep or
+         * changing the actual landing/hit calculation. */
+        if (x < MARVY_TARGET_MIN_X) x = MARVY_TARGET_MIN_X;
+        if (x > MARVY_TARGET_MAX_X) x = MARVY_TARGET_MAX_X;
+        ring_position(&s_ring, x, MARVY_SHEEP_BODY_Y + 3, 60, 24);
+    } else ring_position(&s_ring, 40, 264, 56, 22);
 }
 
 void marvy_view_render(const marvy_game_t *game, int battery_percent,
                        bool input_available)
 {
+    /* The clip only supplies presentation data. Cache that copy below so the
+     * regular scene renderer can animate without touching the real session. */
+    bool demo = game->phase == MARVY_PHASE_DEMO;
+    marvy_demo_frame_t demo_frame;
+    if (demo) {
+        marvy_demo_frame(game->phase_ms, &demo_frame);
+        demo_frame.scene.phase = MARVY_PHASE_DEMO;
+        game = &demo_frame.scene;
+    }
     const marvy_level_config_t *config = marvy_game_level_config(game->level_index);
     if (s_previous_battery != battery_percent) {
         if (battery_percent < 0) lv_label_set_text(s_battery, "--%");
         else lv_label_set_text_fmt(s_battery, "%d%%", battery_percent);
         s_previous_battery = battery_percent;
     }
-    bool gameplay = game->phase == MARVY_PHASE_PLAYING || game->phase == MARVY_PHASE_PAUSED;
+    bool gameplay = game->phase == MARVY_PHASE_PLAYING || game->phase == MARVY_PHASE_PAUSED || demo;
     bool round_restarted = gameplay && (s_previous.level_index != game->level_index ||
-                                          game->stage_elapsed_ms < s_previous.stage_elapsed_ms);
+                           game->stage_elapsed_ms < s_previous.stage_elapsed_ms ||
+                           (demo && s_previous.phase == MARVY_PHASE_DEMO &&
+                            game->phase_ms < s_previous.phase_ms));
     bool page_changed = s_first_render || s_previous.phase != game->phase || round_restarted;
     if (page_changed) {
         bool intro = game->phase == MARVY_PHASE_INTRO;
+        bool follow = game->phase == MARVY_PHASE_FOLLOW;
         bool pause_transition = !round_restarted && gameplay &&
                                (s_previous.phase == MARVY_PHASE_PLAYING ||
                                 s_previous.phase == MARVY_PHASE_PAUSED);
@@ -649,11 +788,20 @@ void marvy_view_render(const marvy_game_t *game, int battery_percent,
         visible(s_pause, game->phase == MARVY_PHASE_PAUSED);
         visible(s_hint, game->phase != MARVY_PHASE_PAUSED);
         visible(s_results, game->phase == MARVY_PHASE_RESULTS);
-        lv_obj_set_style_bg_color(s_screen, lv_color_hex(intro ? PAPER : SKY), 0);
+        visible(s_follow, follow);
+        visible(s_demo_heading, demo);
+        visible(s_demo_caption, demo);
+        visible(s_level_heading, !demo);
+        visible(s_score, !demo);
+        visible(s_timer, !demo);
+        visible(s_progress, !demo);
+        visible(s_combo, !demo);
+        lv_obj_set_style_bg_color(s_screen, lv_color_hex(intro ? PAPER : follow ? 0xFFFFFF : SKY), 0);
         lv_obj_set_style_text_font(s_header, intro ? &marvy_font_16 : &marvy_pixel_16, 0);
         lv_obj_set_style_text_font(s_battery, intro ? &marvy_font_16 : &marvy_pixel_16, 0);
-        lv_obj_set_style_text_color(s_header, lv_color_hex(intro ? PURPLE : CYAN), 0);
-        lv_obj_set_style_text_color(s_battery, lv_color_hex(intro ? INK : WHITE), 0);
+        lv_obj_set_style_text_color(s_header, lv_color_hex(intro ? PURPLE : follow ? 0x2E6CA6 : CYAN), 0);
+        lv_obj_set_style_text_color(s_battery, lv_color_hex(intro || follow ? INK : WHITE), 0);
+        s_previous_demo_step = -1;
         s_previous_feedback = -2;
         s_previous_charge = s_previous_countdown = -1;
         if (!pause_transition) {
@@ -673,6 +821,14 @@ void marvy_view_render(const marvy_game_t *game, int battery_percent,
     else if (game->phase == MARVY_PHASE_BRIEF) render_brief(game, config);
     else if (game->phase == MARVY_PHASE_RESULTS) render_results(game, config);
     else if (gameplay) render_play(game, config, input_available, page_changed);
+    if (demo && s_previous_demo_step != (int)demo_frame.step) {
+        static const char *const captions[] = {
+            "按住 #2 或 #3 蓄力", "按住 #2 或 #3 蓄力", "松手投圈",
+            "普通羊 +1 分", "Marvy 羊 +5 分", "准备开始挑战",
+        };
+        lv_label_set_text(s_demo_caption, captions[demo_frame.step]);
+        s_previous_demo_step = (int)demo_frame.step;
+    }
     if (game->phase == MARVY_PHASE_PAUSED &&
         (page_changed || s_previous.pause_selection != game->pause_selection)) {
         for (unsigned i = 0; i < 2; ++i) row_selected(s_pause_rows[i], i == (unsigned)game->pause_selection);
